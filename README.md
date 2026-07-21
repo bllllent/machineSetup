@@ -2,7 +2,7 @@
 
 Hardware: Minisforum MS-01 Mini Workstation
 OS: Ubuntu Server 26.04 LTS
-Purpose: home server running Immich, Ollama (local AI), and other Docker services
+Purpose: home server running Immich and other Docker services; AI for hobby projects via the hosted OpenAI API
 
 ## 1. Create the boot USB (on Mac, command line)
 
@@ -60,8 +60,8 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 
 ## 4. Post-install stack
 
-- Docker + Docker Compose for all services (Immich, Ollama, etc.) on one flat host.
-- No discrete GPU on the MS-01 — Ollama runs on CPU (fine for 7B–13B models).
+- Docker + Docker Compose for all services (Immich, etc.) on one flat host.
+- No discrete GPU on the MS-01 — AI for projects uses the hosted OpenAI API (section 8) rather than local models.
 
 ## 5. Storage layout
 
@@ -109,20 +109,17 @@ Then in the web UI at `http://<server-ip>:2283`:
 
 App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
 
-## 8. Ollama + Open WebUI (local AI)
+## 8. OpenAI API (for projects)
 
-Deploy:
+Hobby projects call the hosted OpenAI API — no local models. One-time key setup on the server:
+
 ```
-./ollama/setup.sh
+./scripts/setup-openai.sh
 ```
 
-Starts Ollama and Open WebUI, and pulls the default model **gpt-oss:20b** (OpenAI's open-weights model, ~13GB; mixture-of-experts, so it runs acceptably on CPU with 32GB RAM). Pick a different model with `MODEL=llama3.1:8b ./ollama/setup.sh`, or skip the pull with `MODEL=none`.
+Prompts for the key (hidden input — never in shell history, never in this repo, which is public) and stores it in `~/.config/openai/env` (chmod 600). Login shells export `OPENAI_API_KEY` automatically; Docker Compose projects can add `env_file: /home/bwilliams/.config/openai/env`. Re-run the script to rotate the key.
 
-- Chat UI: `http://<server-ip>:3000` — first visitor creates the admin account.
-- Ollama API: `http://<server-ip>:11434`; **OpenAI-compatible API** at `http://<server-ip>:11434/v1` for any OpenAI-client tooling.
-- More models: `sudo docker exec ollama ollama pull <name>` (CPU-friendly: `llama3.1:8b`, `qwen2.5:7b`, `gemma2:9b`).
-
-Models live in Docker volumes on the OS drive — re-downloadable, nothing to back up.
+An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hosted API. If it was ever started, `./scripts/remove-ollama.sh` cleans it off the server (containers, model volumes, images).
 
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
@@ -134,3 +131,4 @@ Models live in Docker volumes on the OS drive — re-downloadable, nothing to ba
 - 2026-07-20: Added Immich stack (`immich/`) — likely primary photo app (mobile auto-backup); archive mounted read-only as an external library. Added `scripts/photo-triage.sh` for pre-index screenshot cleanup.
 - 2026-07-21: Removed Photoprism — Immich is the photo app. `scripts/remove-photoprism.sh` cleans the retired stack off the server (containers, images, `/srv/photoprism`).
 - 2026-07-21: Added Ollama + Open WebUI stack (`ollama/`); default model gpt-oss:20b, OpenAI-compatible API on `:11434/v1`.
+- 2026-07-21: Dropped Ollama in favor of the hosted OpenAI API — `scripts/setup-openai.sh` stores the key; `scripts/remove-ollama.sh` cleans the local stack off the server.
