@@ -63,5 +63,22 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 - Docker + Docker Compose for all services (Photoprism, Ollama, etc.) on one flat host.
 - No discrete GPU on the MS-01 — Ollama runs on CPU (fine for 7B–13B models).
 
+## 5. Photoprism
+
+Photo storage layout:
+- `/srv/photos` — the pictures themselves. Service-agnostic path on purpose: backups and any future photo app point here, so nothing moves if Photoprism gets swapped out.
+- `/srv/photoprism/` — Photoprism's own regenerable data (thumbnail/cache storage, MariaDB, import staging). Safe to delete and rebuild without touching photos.
+
+Deploy on the MS-01:
+```
+cd ~/machineSetup && git pull
+./photoprism/setup.sh
+```
+
+The script is idempotent (re-run freely). It installs Docker if missing, creates the directories above, generates `photoprism/.env` with random passwords on first run (gitignored — this repo is public, never commit `.env`), syncs anything offloaded to `~/photos` into `/srv/photos`, starts the stack, and prints the URL and admin login.
+
+First login: **Library → Index** to scan the originals.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
+- 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
