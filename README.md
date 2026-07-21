@@ -65,18 +65,20 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 
 ## 5. Storage layout
 
-Two 1TB NVMe drives, laid out so photos and their backup are on different disks (a single drive failure can't take both):
+Two 1TB NVMe drives:
 
-- **YMTC (`nvme0n1`) — OS drive:** `/` on a 200G LVM volume; the remaining ~750G is a `backup` volume mounted at `/backup`, the backup target for the photo library.
+- **YMTC (`nvme0n1`) — OS drive:** the system, apps, and Docker images, all on `/` (grown to the full ~950G — the installer only allocated 100G).
 - **WD Blue SN5100 — data drive, mounted at `/srv`:** the photo library (`/srv/photos`, service-agnostic path) and regenerable app data (`/srv/photoprism`).
+
+Backups: external USB drives (photos are on a single internal disk — keep a current copy elsewhere).
 
 One-time setup, in order:
 ```
 ./scripts/setup-data-drive.sh      # format the blank WD Blue, mount at /srv (asks for confirmation)
-./scripts/setup-os-drive-space.sh  # grow / to 200G, create /backup from the rest
+./scripts/setup-os-drive-space.sh  # grow / to the full OS drive (live, non-destructive)
 ```
 
-Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model name (nvme numbering can swap between boots) and refuses to touch any drive with partitions or filesystem signatures. `setup-os-drive-space.sh` never reformats an existing backup volume. Both mount by UUID with `nofail`. Run these **before** the Photoprism setup so the photos land on the data drive.
+Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model name (nvme numbering can swap between boots), refuses to touch any drive with partitions or filesystem signatures, and mounts by UUID with `nofail`. Run these **before** the Photoprism setup so the photos land on the data drive.
 
 ## 6. Photoprism
 
@@ -99,3 +101,4 @@ First login: **Library → Index** to scan the originals.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
 - 2026-07-20: Added `scripts/setup-data-drive.sh` — formats the spare WD Blue SN5100 1TB and mounts it at `/srv` as a dedicated data drive.
 - 2026-07-20: Added `scripts/setup-os-drive-space.sh` — grows `/` to 200G and turns the rest of the OS drive's unallocated LVM space into `/backup`.
+- 2026-07-20: Reworked `setup-os-drive-space.sh` — `/` now gets the whole OS drive (apps + Docker images); backups go to external USB drives instead of an internal `/backup` volume.
