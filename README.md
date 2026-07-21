@@ -82,6 +82,8 @@ Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model na
 
 ## 6. Photoprism
 
+> Note: Immich (section 8) was added later as the likely primary photo app — better mobile auto-backup. Both stacks read the same archive and can coexist (different ports), but don't run both first-time indexes at once on CPU. To stop this one: `cd photoprism && sudo docker compose down`.
+
 Photo storage layout:
 - `/srv/data/Pictures` — the pictures themselves. Service-agnostic path on purpose: backups and any future photo app point here, so nothing moves if Photoprism gets swapped out.
 - `/srv/photoprism/` — Photoprism's own regenerable data (thumbnail/cache storage, MariaDB, import staging). Safe to delete and rebuild without touching photos.
@@ -96,6 +98,33 @@ The script is idempotent (re-run freely). It installs Docker if missing, creates
 
 First login: **Library → Index** to scan the originals.
 
+## 7. Photo triage (before first index)
+
+Clean likely screenshots/screen recordings out of the library before indexing (Immich mounts the archive read-only, so junk has to be removed on disk):
+
+```
+./scripts/photo-triage.sh            # dry run — reports candidates, writes a list
+./scripts/photo-triage.sh --apply    # moves them to /srv/data/_triage/screenshots
+```
+
+Heuristics: screenshot-style filenames, plus PNGs with no camera EXIF. Nothing is ever deleted — candidates move to the triage dir with relative paths preserved, so false positives can be moved straight back. Review and delete the triage dir by hand.
+
+Geolocation grouping is *not* needed as pre-processing: Immich reverse-geocodes on index (offline) and provides map view and search-by-place without reorganizing any files.
+
+## 8. Immich
+
+Deploy:
+```
+./immich/setup.sh
+```
+Then in the web UI at `http://<server-ip>:2283`:
+1. Create the admin account (first visitor becomes admin).
+2. Administration → External Libraries → add `/srv/data/Pictures` and scan. The archive is mounted read-only — Immich indexes it in place and can never modify the originals.
+3. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
+4. Install the Immich mobile app and point it at the server URL for automatic phone backup. Phone uploads land in `/srv/data/immich` (Immich-managed), which the wholesale `/srv/data` backup covers.
+
+App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -103,3 +132,4 @@ First login: **Library → Index** to scan the originals.
 - 2026-07-20: Added `scripts/setup-os-drive-space.sh` — grows `/` to 200G and turns the rest of the OS drive's unallocated LVM space into `/backup`.
 - 2026-07-20: Reworked `setup-os-drive-space.sh` — `/` now gets the whole OS drive (apps + Docker images); backups go to external USB drives instead of an internal `/backup` volume.
 - 2026-07-20: Photos moved from `/srv/photos` to `/srv/data/Pictures` — personal media now lives under one `/srv/data/` tree for wholesale backup.
+- 2026-07-20: Added Immich stack (`immich/`) — likely primary photo app (mobile auto-backup); archive mounted read-only as an external library. Added `scripts/photo-triage.sh` for pre-index screenshot cleanup.
