@@ -2,7 +2,7 @@
 
 Hardware: Minisforum MS-01 Mini Workstation
 OS: Ubuntu Server 26.04 LTS
-Purpose: home server running Photoprism, Ollama (local AI), and other Docker services
+Purpose: home server running Immich, Ollama (local AI), and other Docker services
 
 ## 1. Create the boot USB (on Mac, command line)
 
@@ -60,7 +60,7 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 
 ## 4. Post-install stack
 
-- Docker + Docker Compose for all services (Photoprism, Ollama, etc.) on one flat host.
+- Docker + Docker Compose for all services (Immich, Ollama, etc.) on one flat host.
 - No discrete GPU on the MS-01 — Ollama runs on CPU (fine for 7B–13B models).
 
 ## 5. Storage layout
@@ -68,7 +68,7 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 Two 1TB NVMe drives:
 
 - **YMTC (`nvme0n1`) — OS drive:** the system, apps, and Docker images, all on `/` (grown to the full ~950G — the installer only allocated 100G).
-- **WD Blue SN5100 — data drive, mounted at `/srv`:** personal media under `/srv/data/` (`Pictures`, later `Music`, …) and regenerable app data (`/srv/photoprism`). Back up `/srv/data` wholesale; app data can always be rebuilt.
+- **WD Blue SN5100 — data drive, mounted at `/srv`:** personal media under `/srv/data/` (`Pictures`, later `Music`, …) and regenerable app data (`/srv/immich`). Back up `/srv/data` wholesale; app data can always be rebuilt.
 
 Backups: external USB drives (photos are on a single internal disk — keep a current copy elsewhere).
 
@@ -78,27 +78,11 @@ One-time setup, in order:
 ./scripts/setup-os-drive-space.sh  # grow / to the full OS drive (live, non-destructive)
 ```
 
-Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model name (nvme numbering can swap between boots), refuses to touch any drive with partitions or filesystem signatures, and mounts by UUID with `nofail`. Run these **before** the Photoprism setup so the photos land on the data drive.
+Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model name (nvme numbering can swap between boots), refuses to touch any drive with partitions or filesystem signatures, and mounts by UUID with `nofail`. Run these **before** the photo app setup so the photos land on the data drive.
 
-## 6. Photoprism
+`/srv/data/Pictures` is deliberately a service-agnostic path: backups and any future photo app point here, so nothing moves if the app gets swapped out (as happened with Photoprism → Immich; `scripts/remove-photoprism.sh` cleans the retired stack off the server).
 
-> Note: Immich (section 8) was added later as the likely primary photo app — better mobile auto-backup. Both stacks read the same archive and can coexist (different ports), but don't run both first-time indexes at once on CPU. To stop this one: `cd photoprism && sudo docker compose down`.
-
-Photo storage layout:
-- `/srv/data/Pictures` — the pictures themselves. Service-agnostic path on purpose: backups and any future photo app point here, so nothing moves if Photoprism gets swapped out.
-- `/srv/photoprism/` — Photoprism's own regenerable data (thumbnail/cache storage, MariaDB, import staging). Safe to delete and rebuild without touching photos.
-
-Deploy on the MS-01:
-```
-cd ~/machineSetup && git pull
-./photoprism/setup.sh
-```
-
-The script is idempotent (re-run freely). It installs Docker if missing, creates the directories above, generates `photoprism/.env` with random passwords on first run (gitignored — this repo is public, never commit `.env`), syncs anything offloaded to `~/photos` into `/srv/data/Pictures`, starts the stack, and prints the URL and admin login.
-
-First login: **Library → Index** to scan the originals.
-
-## 7. Photo triage (before first index)
+## 6. Photo triage (before first index)
 
 Clean likely screenshots/screen recordings out of the library before indexing (Immich mounts the archive read-only, so junk has to be removed on disk):
 
@@ -111,7 +95,7 @@ Heuristics: screenshot-style filenames, plus PNGs with no camera EXIF. Nothing i
 
 Geolocation grouping is *not* needed as pre-processing: Immich reverse-geocodes on index (offline) and provides map view and search-by-place without reorganizing any files.
 
-## 8. Immich
+## 7. Immich
 
 Deploy:
 ```
@@ -125,6 +109,21 @@ Then in the web UI at `http://<server-ip>:2283`:
 
 App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
 
+## 8. Ollama + Open WebUI (local AI)
+
+Deploy:
+```
+./ollama/setup.sh
+```
+
+Starts Ollama and Open WebUI, and pulls the default model **gpt-oss:20b** (OpenAI's open-weights model, ~13GB; mixture-of-experts, so it runs acceptably on CPU with 32GB RAM). Pick a different model with `MODEL=llama3.1:8b ./ollama/setup.sh`, or skip the pull with `MODEL=none`.
+
+- Chat UI: `http://<server-ip>:3000` — first visitor creates the admin account.
+- Ollama API: `http://<server-ip>:11434`; **OpenAI-compatible API** at `http://<server-ip>:11434/v1` for any OpenAI-client tooling.
+- More models: `sudo docker exec ollama ollama pull <name>` (CPU-friendly: `llama3.1:8b`, `qwen2.5:7b`, `gemma2:9b`).
+
+Models live in Docker volumes on the OS drive — re-downloadable, nothing to back up.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -133,3 +132,5 @@ App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, no
 - 2026-07-20: Reworked `setup-os-drive-space.sh` — `/` now gets the whole OS drive (apps + Docker images); backups go to external USB drives instead of an internal `/backup` volume.
 - 2026-07-20: Photos moved from `/srv/photos` to `/srv/data/Pictures` — personal media now lives under one `/srv/data/` tree for wholesale backup.
 - 2026-07-20: Added Immich stack (`immich/`) — likely primary photo app (mobile auto-backup); archive mounted read-only as an external library. Added `scripts/photo-triage.sh` for pre-index screenshot cleanup.
+- 2026-07-21: Removed Photoprism — Immich is the photo app. `scripts/remove-photoprism.sh` cleans the retired stack off the server (containers, images, `/srv/photoprism`).
+- 2026-07-21: Added Ollama + Open WebUI stack (`ollama/`); default model gpt-oss:20b, OpenAI-compatible API on `:11434/v1`.
