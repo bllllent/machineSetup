@@ -68,7 +68,7 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 Two 1TB NVMe drives:
 
 - **YMTC (`nvme0n1`) — OS drive:** the system, apps, and Docker images, all on `/` (grown to the full ~950G — the installer only allocated 100G).
-- **WD Blue SN5100 — data drive, mounted at `/srv`:** the photo library (`/srv/photos`, service-agnostic path) and regenerable app data (`/srv/photoprism`).
+- **WD Blue SN5100 — data drive, mounted at `/srv`:** personal media under `/srv/data/` (`Pictures`, later `Music`, …) and regenerable app data (`/srv/photoprism`). Back up `/srv/data` wholesale; app data can always be rebuilt.
 
 Backups: external USB drives (photos are on a single internal disk — keep a current copy elsewhere).
 
@@ -83,7 +83,7 @@ Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model na
 ## 6. Photoprism
 
 Photo storage layout:
-- `/srv/photos` — the pictures themselves. Service-agnostic path on purpose: backups and any future photo app point here, so nothing moves if Photoprism gets swapped out.
+- `/srv/data/Pictures` — the pictures themselves. Service-agnostic path on purpose: backups and any future photo app point here, so nothing moves if Photoprism gets swapped out.
 - `/srv/photoprism/` — Photoprism's own regenerable data (thumbnail/cache storage, MariaDB, import staging). Safe to delete and rebuild without touching photos.
 
 Deploy on the MS-01:
@@ -92,7 +92,7 @@ cd ~/machineSetup && git pull
 ./photoprism/setup.sh
 ```
 
-The script is idempotent (re-run freely). It installs Docker if missing, creates the directories above, generates `photoprism/.env` with random passwords on first run (gitignored — this repo is public, never commit `.env`), syncs anything offloaded to `~/photos` into `/srv/photos`, starts the stack, and prints the URL and admin login.
+The script is idempotent (re-run freely). It installs Docker if missing, creates the directories above, generates `photoprism/.env` with random passwords on first run (gitignored — this repo is public, never commit `.env`), syncs anything offloaded to `~/photos` into `/srv/data/Pictures`, starts the stack, and prints the URL and admin login.
 
 First login: **Library → Index** to scan the originals.
 
@@ -102,3 +102,4 @@ First login: **Library → Index** to scan the originals.
 - 2026-07-20: Added `scripts/setup-data-drive.sh` — formats the spare WD Blue SN5100 1TB and mounts it at `/srv` as a dedicated data drive.
 - 2026-07-20: Added `scripts/setup-os-drive-space.sh` — grows `/` to 200G and turns the rest of the OS drive's unallocated LVM space into `/backup`.
 - 2026-07-20: Reworked `setup-os-drive-space.sh` — `/` now gets the whole OS drive (apps + Docker images); backups go to external USB drives instead of an internal `/backup` volume.
+- 2026-07-20: Photos moved from `/srv/photos` to `/srv/data/Pictures` — personal media now lives under one `/srv/data/` tree for wholesale backup.

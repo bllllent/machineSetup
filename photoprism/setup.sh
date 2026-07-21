@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Photoprism setup for the MS-01. Idempotent — safe to re-run.
 #   - installs Docker if missing
-#   - creates /srv/photos (originals) and /srv/photoprism (app data)
+#   - creates /srv/data/Pictures (originals) and /srv/photoprism (app data)
 #   - generates .env with random passwords on first run (gitignored)
-#   - moves photos offloaded to ~/photos into /srv/photos
+#   - moves photos offloaded to ~/photos into /srv/data/Pictures
 #   - starts the stack and prints the URL + login
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-PHOTOS_DIR=/srv/photos
+PHOTOS_DIR=/srv/data/Pictures
 APP_DIR=/srv/photoprism
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -22,7 +22,7 @@ sudo usermod -aG docker "$USER"
 
 echo "==> Creating data directories..."
 sudo mkdir -p "$PHOTOS_DIR" "$APP_DIR"/storage "$APP_DIR"/import "$APP_DIR"/mariadb
-sudo chown "$USER":"$USER" "$PHOTOS_DIR" "$APP_DIR" "$APP_DIR"/storage "$APP_DIR"/import
+sudo chown "$USER":"$USER" "$(dirname "$PHOTOS_DIR")" "$PHOTOS_DIR" "$APP_DIR" "$APP_DIR"/storage "$APP_DIR"/import
 
 if [ ! -f .env ]; then
     echo "==> Generating .env with random passwords..."

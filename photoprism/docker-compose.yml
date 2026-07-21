@@ -21,7 +21,7 @@ services:
       PHOTOPRISM_DETECT_NSFW: "false"
     working_dir: "/photoprism"
     volumes:
-      - "/srv/photos:/photoprism/originals"
+      - "/srv/data/Pictures:/photoprism/originals"
       - "/srv/photoprism/storage:/photoprism/storage"
       - "/srv/photoprism/import:/photoprism/import"
     devices:
