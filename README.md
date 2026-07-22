@@ -68,7 +68,7 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 Two 1TB NVMe drives:
 
 - **YMTC (`nvme0n1`) — OS drive:** the system, apps, and Docker images, all on `/` (grown to the full ~950G — the installer only allocated 100G).
-- **WD Blue SN5100 — data drive, mounted at `/srv`:** personal media under `/srv/data/` (`Pictures`, later `Music`, …) and regenerable app data (`/srv/immich`). Back up `/srv/data` wholesale; app data can always be rebuilt.
+- **WD Blue SN5100 — data drive, mounted at `/srv`:** personal media under `/srv/data/` — the Immich-managed photo library (`/srv/data/immich`), later `Music`, … — and regenerable app state (`/srv/immich`). Back up `/srv/data` wholesale; app state can always be rebuilt.
 
 Backups: external USB drives (photos are on a single internal disk — keep a current copy elsewhere).
 
@@ -80,20 +80,22 @@ One-time setup, in order:
 
 Both scripts are idempotent. `setup-data-drive.sh` finds the WD Blue by model name (nvme numbering can swap between boots), refuses to touch any drive with partitions or filesystem signatures, and mounts by UUID with `nofail`. Run these **before** the photo app setup so the photos land on the data drive.
 
-`/srv/data/Pictures` is deliberately a service-agnostic path: backups and any future photo app point here, so nothing moves if the app gets swapped out (as happened with Photoprism → Immich; `scripts/remove-photoprism.sh` cleans the retired stack off the server).
+Photos are fully Immich-managed (imported, not an external library) so the app can delete/trash/dedupe. The storage template keeps the on-disk layout portable — `library/<user>/YYYY/MM/<original filename>` — so a future app swap is still just files (as happened with Photoprism → Immich; `scripts/remove-photoprism.sh` cleans that retired stack off the server). The source USB drive is kept as the dated offline backup of the original folder structure.
 
-## 6. Photo triage (before first index)
+## 6. Photo triage (optional, before import)
 
-Clean likely screenshots/screen recordings out of the library before indexing (Immich mounts the archive read-only, so junk has to be removed on disk):
+Screenshots/screen recordings can be cleaned out of the source before importing:
 
 ```
-./scripts/photo-triage.sh            # dry run — reports candidates, writes a list
-./scripts/photo-triage.sh --apply    # moves them to /srv/data/_triage/screenshots
+LIBRARY=/mnt/usb ./scripts/photo-triage.sh            # dry run — reports candidates
+LIBRARY=/mnt/usb ./scripts/photo-triage.sh --apply    # moves them to /srv/data/_triage
 ```
 
-Heuristics: screenshot-style filenames, plus PNGs with no camera EXIF. Nothing is ever deleted — candidates move to the triage dir with relative paths preserved, so false positives can be moved straight back. Review and delete the triage dir by hand.
+Heuristics: screenshot-style filenames, plus PNGs with no camera EXIF. Nothing is ever deleted — candidates move to the triage dir with relative paths preserved, so false positives can be moved straight back. Note `--apply` moves files *off the USB source*.
 
-Geolocation grouping is *not* needed as pre-processing: Immich reverse-geocodes on index (offline) and provides map view and search-by-place without reorganizing any files.
+Alternatively skip this and clean up in-app after import (search + bulk delete, Utilities → Duplicates) — possible because the library is imported, not external.
+
+Geolocation grouping is *not* needed as pre-processing: Immich reverse-geocodes on import (offline) and provides map view and search-by-place.
 
 ## 7. Immich
 
@@ -103,9 +105,14 @@ Deploy:
 ```
 Then in the web UI at `http://<server-ip>:2283`:
 1. Create the admin account (first visitor becomes admin).
-2. Administration → External Libraries → add `/srv/data/Pictures` and scan. The archive is mounted read-only — Immich indexes it in place and can never modify the originals.
-3. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
-4. Install the Immich mobile app and point it at the server URL for automatic phone backup. Phone uploads land in `/srv/data/immich` (Immich-managed), which the wholesale `/srv/data` backup covers.
+2. **Before importing:** Administration → Settings → Storage Template → enable, so imports land as `/srv/data/immich/library/<user>/YYYY/MM/<original filename>`.
+3. Create an API key (avatar → Account Settings → API Keys), then bulk-import:
+   ```
+   ./scripts/import-photos.sh /mnt/usb
+   ```
+   Album folders on the drive become Immich albums (parent folder name). Re-runs are safe — already-imported files are skipped by content hash.
+4. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
+5. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
 App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
 
@@ -132,3 +139,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-21: Removed Photoprism — Immich is the photo app. `scripts/remove-photoprism.sh` cleans the retired stack off the server (containers, images, `/srv/photoprism`).
 - 2026-07-21: Added Ollama + Open WebUI stack (`ollama/`); default model gpt-oss:20b, OpenAI-compatible API on `:11434/v1`.
 - 2026-07-21: Dropped Ollama in favor of the hosted OpenAI API — `scripts/setup-openai.sh` stores the key; `scripts/remove-ollama.sh` cleans the local stack off the server.
+- 2026-07-21: Switched Immich from external library to full import (`scripts/import-photos.sh`) — enables in-app delete/dedupe and folder→album mapping; storage template keeps the on-disk layout portable. `/srv/data/Pictures` retired; USB kept as offline backup.

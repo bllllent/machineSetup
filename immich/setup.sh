@@ -4,9 +4,9 @@
 #   - creates /srv/data/immich (uploads) and /srv/immich (app state)
 #   - generates .env with a random DB password on first run (gitignored)
 #   - starts the stack and prints the URL
-# First run in the web UI: create the admin account, then add
-# /srv/data/Pictures as an external library (Administration > External
-# Libraries) and let it scan.
+# First run in the web UI: create the admin account and enable the storage
+# template (Administration > Settings > Storage Template), then bulk-import
+# the archive with scripts/import-photos.sh.
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -35,6 +35,6 @@ sudo docker compose up -d
 IP=$(hostname -I | awk '{print $1}')
 echo
 echo "Immich is starting at: http://${IP}:2283"
-echo "First visit: create the admin account in the web UI, then add"
-echo "/srv/data/Pictures as an external library and let it scan."
+echo "First visit: create the admin account, enable the storage template"
+echo "(Administration > Settings), then import: ./scripts/import-photos.sh"
 echo "(DB password lives in $(pwd)/.env — gitignored, do not commit)"

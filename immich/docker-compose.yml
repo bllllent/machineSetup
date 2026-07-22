@@ -13,9 +13,6 @@ services:
     volumes:
       - "${UPLOAD_LOCATION}:/data"
       - /etc/localtime:/etc/localtime:ro
-      # existing archive, indexed in place as an external library (add it in
-      # the admin UI); read-only so Immich can never modify the originals
-      - /srv/data/Pictures:/srv/data/Pictures:ro
     devices:
       # Intel iGPU (Quick Sync) — enable QSV under Admin > Video Transcoding
       - /dev/dri:/dev/dri
