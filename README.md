@@ -111,8 +111,14 @@ Then in the web UI at `http://<server-ip>:2283`:
    ./scripts/import-photos.sh /mnt/usb
    ```
    Album folders on the drive become Immich albums (parent folder name). Re-runs are safe — already-imported files are skipped by content hash.
-4. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
-5. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
+4. After the import: fix assets whose date metadata was missing (old videos fall back to file mtime) but whose filename encodes the real date (`YYYY_MM_DD_HHMM.ext`):
+   ```
+   ./scripts/fix-dates-from-filenames.py            # dry run
+   ./scripts/fix-dates-from-filenames.py --apply
+   ```
+   Idempotent — safe to re-run after later imports.
+5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
+6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
 App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
 
@@ -140,3 +146,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-21: Added Ollama + Open WebUI stack (`ollama/`); default model gpt-oss:20b, OpenAI-compatible API on `:11434/v1`.
 - 2026-07-21: Dropped Ollama in favor of the hosted OpenAI API — `scripts/setup-openai.sh` stores the key; `scripts/remove-ollama.sh` cleans the local stack off the server.
 - 2026-07-21: Switched Immich from external library to full import (`scripts/import-photos.sh`) — enables in-app delete/dedupe and folder→album mapping; storage template keeps the on-disk layout portable. `/srv/data/Pictures` retired; USB kept as offline backup.
+- 2026-07-22: Added `scripts/fix-dates-from-filenames.py` — corrects Immich dates for old videos with no creation metadata, using `YYYY_MM_DD_HHMM` filenames as ground truth.
