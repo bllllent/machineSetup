@@ -30,7 +30,7 @@ fi
 
 # The import copies everything into /srv/data/immich — check it fits.
 echo "==> Checking free space (sizing $SOURCE)..."
-need_k=$(du -sk "$SOURCE" | awk '{print $1}')
+need_k=$(sudo du -sk "$SOURCE" | awk '{print $1}')
 avail_k=$(df -k --output=avail /srv/data | tail -1 | tr -d ' ')
 if [ "$avail_k" -lt "$need_k" ]; then
     echo "Not enough space on /srv/data: need ~$((need_k / 1024 / 1024))G, have $((avail_k / 1024 / 1024))G." >&2
