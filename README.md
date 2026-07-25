@@ -117,6 +117,10 @@ Then in the web UI at `http://<server-ip>:2283`:
    ./scripts/fix-dates-from-filenames.py --apply
    ```
    Idempotent — safe to re-run after later imports.
+   For albums whose *name* says when (scans, digitized film), redate the whole album:
+   ```
+   ./scripts/redate-album.py "1999-07-07 Hal's Birthday" 1999-07-07 --apply
+   ```
 5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
 6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
@@ -147,3 +151,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-21: Dropped Ollama in favor of the hosted OpenAI API — `scripts/setup-openai.sh` stores the key; `scripts/remove-ollama.sh` cleans the local stack off the server.
 - 2026-07-21: Switched Immich from external library to full import (`scripts/import-photos.sh`) — enables in-app delete/dedupe and folder→album mapping; storage template keeps the on-disk layout portable. `/srv/data/Pictures` retired; USB kept as offline backup.
 - 2026-07-22: Added `scripts/fix-dates-from-filenames.py` — corrects Immich dates for old videos with no creation metadata, using `YYYY_MM_DD_HHMM` filenames as ground truth.
+- 2026-07-25: Added `scripts/redate-album.py` — sets every asset in an album to a given date (for scans/digitized photos where the album name is the real date).
