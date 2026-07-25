@@ -4,8 +4,8 @@
 #   ./import-photos.sh [source-dir]     # default /mnt/usb
 # Re-runs are safe: already-imported files are skipped by content hash.
 # Each photo's parent folder name becomes an Immich album (--album), so
-# album folders on the source drive carry over. Loose files at the source
-# root land in an album named "import" — rename or dissolve it afterwards.
+# album folders on the source drive carry over. Loose files directly in the
+# source folder land in an album named after the source folder itself.
 #
 # Before the FIRST import:
 #   - enable the storage template (Administration > Settings > Storage
@@ -39,8 +39,10 @@ if [ "$avail_k" -lt "$need_k" ]; then
 fi
 
 echo "==> Importing $SOURCE into Immich (duplicates skipped by hash)..."
+# mounted under its own name so --album maps loose root files to the source
+# folder's name (not "import")
 sudo docker run --rm --network host \
-    -v "$SOURCE":/import:ro \
+    -v "$SOURCE":"/import/$(basename "$SOURCE")":ro \
     -e IMMICH_INSTANCE_URL=http://localhost:2283/api \
     -e IMMICH_API_KEY="$IMMICH_API_KEY" \
     ghcr.io/immich-app/immich-cli:latest \

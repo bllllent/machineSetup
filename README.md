@@ -121,6 +121,11 @@ Then in the web UI at `http://<server-ip>:2283`:
    ```
    ./scripts/redate-album.py "1999-07-07 Hal's Birthday" 1999-07-07 --apply
    ```
+   Scans with *no* known date use a sentinel: `1970-01-01` means "date unknown". Two layers:
+   - Immich catalog: `./scripts/redate-album.py "Early_years" 1970-01-01 --apply`
+   - The files themselves (EXIF + filename prefix), run against the **USB source**, never the Immich library: `./scripts/stamp-unknown-date.sh /mnt/usb/Pictures/Early_years --apply`
+
+   Stamping changes file hashes — re-importing a stamped folder duplicates its photos unless the album's assets are deleted from Immich first.
 5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
 6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
@@ -152,3 +157,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-21: Switched Immich from external library to full import (`scripts/import-photos.sh`) — enables in-app delete/dedupe and folder→album mapping; storage template keeps the on-disk layout portable. `/srv/data/Pictures` retired; USB kept as offline backup.
 - 2026-07-22: Added `scripts/fix-dates-from-filenames.py` — corrects Immich dates for old videos with no creation metadata, using `YYYY_MM_DD_HHMM` filenames as ground truth.
 - 2026-07-25: Added `scripts/redate-album.py` — sets every asset in an album to a given date (for scans/digitized photos where the album name is the real date).
+- 2026-07-25: Added `scripts/stamp-unknown-date.sh` — writes the 1970-01-01 "date unknown" sentinel into EXIF + filenames of source files. Import script now maps loose root files to an album named after the source folder.
