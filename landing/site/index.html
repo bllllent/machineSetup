@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Home Server</title>
+<title>100 Bosworth</title>
 <style>
   :root { color-scheme: dark light; }
   * { box-sizing: border-box; margin: 0; }
@@ -46,8 +46,8 @@
 </head>
 <body>
 <header>
-  <h1 id="host">Home Server</h1>
-  <p>Minisforum MS-01 &middot; everything running on this box, one click away</p>
+  <h1>100 Bosworth</h1>
+  <p>The house &middot; everything on the network, one click away</p>
 </header>
 <main id="grid"></main>
 
@@ -60,8 +60,6 @@ const services = [
   // { name: "Printer",        desc: "Print queue & ink",  icon: "🖨️", url: "http://192.168.1.xx" },
   // { name: "Router",         desc: "Network admin",      icon: "🌐", url: "http://192.168.1.1" },
 ];
-
-document.getElementById("host").textContent = location.hostname || "Home Server";
 
 const grid = document.getElementById("grid");
 for (const s of services) {
