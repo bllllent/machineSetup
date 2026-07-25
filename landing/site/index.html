@@ -15,8 +15,13 @@
   header { max-width: 60rem; margin: 0 auto 2.5rem; }
   h1 { font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
   header p { color: #8b929c; margin-top: 0.35rem; font-size: 0.95rem; }
-  main {
-    max-width: 60rem; margin: 0 auto; display: grid; gap: 1rem;
+  main { max-width: 60rem; margin: 0 auto; }
+  h2 {
+    font-size: 0.8rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: #8b929c; margin: 2rem 0 0.8rem;
+  }
+  .grid {
+    display: grid; gap: 1rem;
     grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   }
   .card {
@@ -54,32 +59,57 @@
 <script>
 // Add a service: one entry here, commit, `git pull` on the server, refresh.
 // Same-host apps: give a `port`. Other devices on the network: give a `url`.
-const services = [
-  { name: "Immich", desc: "Picture server — photos & videos", icon: "📷", port: 2283 },
-  // { name: "Home Assistant", desc: "Home automation",   icon: "🏠", url: "http://homeassistant.local:8123" },
-  // { name: "Printer",        desc: "Print queue & ink",  icon: "🖨️", url: "http://192.168.1.xx" },
-  // { name: "Router",         desc: "Network admin",      icon: "🌐", url: "http://192.168.1.1" },
+const sections = [
+  { title: "On this server", services: [
+    { name: "Immich", desc: "Picture server — photos & videos", icon: "📷", port: 2283 },
+  ]},
+  { title: "Network", services: [
+    { name: "UniFi Network", desc: "Gateway, switches & WiFi", icon: "🌐", url: "https://192.168.0.1" },
+    // { name: "Printer", desc: "Print queue & ink", icon: "🖨️", url: "http://192.168.0.xx" },
+  ]},
+  { title: "Cameras", services: [
+    { name: "Axis A/B",   desc: "Camera — 192.168.0.217", icon: "🎥", url: "http://192.168.0.217" },
+    { name: "Axis 78:e2", desc: "Camera — 192.168.0.84",  icon: "🎥", url: "http://192.168.0.84" },
+    { name: "Axis 87:b6", desc: "Camera — 192.168.0.226", icon: "🎥", url: "http://192.168.0.226" },
+    { name: "Axis 93:c2", desc: "Camera — 192.168.0.88",  icon: "🎥", url: "http://192.168.0.88" },
+  ]},
+  { title: "Energy", services: [
+    { name: "Envoy Solar", desc: "Enphase solar gateway", icon: "🔆", url: "http://192.168.10.47" },
+    { name: "Victron 0228", desc: "GX console — 192.168.0.80",  icon: "🔋", url: "http://192.168.0.80" },
+    { name: "Victron 0240", desc: "GX console — 192.168.0.173", icon: "🔋", url: "http://192.168.0.173" },
+    { name: "Victron 0296", desc: "GX console — 192.168.0.90",  icon: "🔋", url: "http://192.168.0.90" },
+    { name: "Victron 0306", desc: "GX console — 192.168.0.98",  icon: "🔋", url: "http://192.168.0.98" },
+  ]},
 ];
 
-const grid = document.getElementById("grid");
-for (const s of services) {
-  const href = s.url ?? `http://${location.hostname}:${s.port}`;
-  const a = document.createElement("a");
-  a.className = "card";
-  a.href = href;
-  a.innerHTML = `<span class="dot"></span><span class="icon"></span>
-    <span class="name"></span><span class="desc"></span>`;
-  a.querySelector(".icon").textContent = s.icon;
-  a.querySelector(".name").textContent = s.name;
-  a.querySelector(".desc").textContent = s.desc;
-  grid.appendChild(a);
+const main = document.getElementById("grid");
+for (const section of sections) {
+  const h2 = document.createElement("h2");
+  h2.textContent = section.title;
+  main.appendChild(h2);
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  main.appendChild(grid);
 
-  // reachability dot: no-cors fetch succeeds opaquely if something answers
-  const ctl = new AbortController();
-  setTimeout(() => ctl.abort(), 4000);
-  fetch(href, { mode: "no-cors", signal: ctl.signal })
-    .then(() => a.querySelector(".dot").classList.add("up"))
-    .catch(() => a.querySelector(".dot").classList.add("down"));
+  for (const s of section.services) {
+    const href = s.url ?? `http://${location.hostname}:${s.port}`;
+    const a = document.createElement("a");
+    a.className = "card";
+    a.href = href;
+    a.innerHTML = `<span class="dot"></span><span class="icon"></span>
+      <span class="name"></span><span class="desc"></span>`;
+    a.querySelector(".icon").textContent = s.icon;
+    a.querySelector(".name").textContent = s.name;
+    a.querySelector(".desc").textContent = s.desc;
+    grid.appendChild(a);
+
+    // reachability dot: no-cors fetch succeeds opaquely if something answers
+    const ctl = new AbortController();
+    setTimeout(() => ctl.abort(), 4000);
+    fetch(href, { mode: "no-cors", signal: ctl.signal })
+      .then(() => a.querySelector(".dot").classList.add("up"))
+      .catch(() => a.querySelector(".dot").classList.add("down"));
+  }
 }
 </script>
 </body>
