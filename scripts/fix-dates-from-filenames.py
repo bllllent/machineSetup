@@ -36,6 +36,12 @@ APPLY = "--apply" in sys.argv
 PATTERN = re.compile(r"^(\d{4})_(\d{2})_(\d{2})_(\d{2})(\d{2})\.\w+$", re.IGNORECASE)
 
 
+class ApiError(Exception):
+    def __init__(self, code, detail):
+        self.code = code
+        super().__init__(f"HTTP {code}: {detail}")
+
+
 def req(method, path, body=None):
     r = urllib.request.Request(
         API + path,
@@ -44,13 +50,30 @@ def req(method, path, body=None):
         headers={"x-api-key": key, "Content-Type": "application/json",
                  "Accept": "application/json"},
     )
-    with urllib.request.urlopen(r) as resp:
-        return json.loads(resp.read() or "{}")
+    try:
+        with urllib.request.urlopen(r) as resp:
+            return json.loads(resp.read() or "{}")
+    except urllib.error.HTTPError as e:
+        raise ApiError(e.code, e.read().decode(errors="replace")) from None
+
+
+# the paginated asset-search endpoint moved between Immich versions
+SEARCH_PATHS = ["/search/metadata", "/search/assets"]
+
+
+def search_page(page):
+    last = None
+    for path in SEARCH_PATHS:
+        try:
+            return req("POST", path, {"page": page, "size": 250})
+        except ApiError as e:
+            last = f"POST {path} -> {e}"
+    sys.exit(f"Asset search failed. Server said:\n{last}")
 
 
 page, checked, mismatched, already_ok = 1, 0, 0, 0
 while page:
-    result = req("POST", "/search/metadata", {"page": page, "size": 1000})
+    result = search_page(int(page))
     assets = result["assets"]
     for asset in assets["items"]:
         checked += 1
