@@ -35,6 +35,12 @@ if len(args) != 2 or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[1]):
 album_name, target_date = args
 
 
+class ApiError(Exception):
+    def __init__(self, code, detail):
+        self.code = code
+        super().__init__(f"HTTP {code}: {detail}")
+
+
 def req(method, path, body=None):
     r = urllib.request.Request(
         API + path,
@@ -47,10 +53,40 @@ def req(method, path, body=None):
         with urllib.request.urlopen(r) as resp:
             return json.loads(resp.read() or "{}")
     except urllib.error.HTTPError as e:
-        sys.exit(f"{method} {path} -> HTTP {e.code}: {e.read().decode(errors='replace')}")
+        raise ApiError(e.code, e.read().decode(errors="replace")) from None
 
 
-albums = req("GET", "/albums")
+def get_album_assets(album):
+    """Album responses embed assets in some Immich versions but not others;
+    fall back to a search filtered by album id."""
+    try:
+        assets = req("GET", f"/albums/{album['id']}?withoutAssets=false").get("assets", [])
+    except ApiError:
+        assets = []
+    if assets:
+        return assets
+    out, page, last = [], 1, None
+    while page:
+        res = None
+        for path in ("/search/metadata", "/search/assets"):
+            try:
+                res = req("POST", path,
+                          {"albumIds": [album["id"]], "page": int(page), "size": 250})
+                break
+            except ApiError as e:
+                last = f"POST {path} -> {e}"
+        if res is None:
+            sys.exit(f"Could not list album assets. Server said:\n{last}")
+        chunk = res["assets"]
+        out.extend(chunk["items"])
+        page = chunk.get("nextPage")
+    return out
+
+
+try:
+    albums = req("GET", "/albums")
+except ApiError as e:
+    sys.exit(f"GET /albums -> {e}")
 matches = [a for a in albums if a.get("albumName") == album_name]
 if not matches:
     near = [a["albumName"] for a in albums
@@ -60,7 +96,9 @@ if not matches:
 if len(matches) > 1:
     sys.exit(f'Multiple albums named "{album_name}" — rename one first.')
 
-assets = req("GET", f"/albums/{matches[0]['id']}").get("assets", [])
+album = matches[0]
+print(f'Album "{album["albumName"]}" reports {album.get("assetCount", "?")} assets.')
+assets = get_album_assets(album)
 assets.sort(key=lambda a: a.get("localDateTime") or a.get("fileCreatedAt") or "")
 
 changed = skipped = 0
@@ -74,7 +112,10 @@ for i, asset in enumerate(assets):
     new_dt = f"{target_date}T{12 + hh:02d}:{mi:02d}:{ss:02d}.000Z"
     print(f"{asset.get('originalFileName')}: {have or '??'} -> {new_dt[:19]}")
     if APPLY:
-        req("PUT", f"/assets/{asset['id']}", {"dateTimeOriginal": new_dt})
+        try:
+            req("PUT", f"/assets/{asset['id']}", {"dateTimeOriginal": new_dt})
+        except ApiError as e:
+            sys.exit(f"PUT /assets/{asset['id']} -> {e}")
     changed += 1
 
 verb = "Updated" if APPLY else "Would update"
