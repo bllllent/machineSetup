@@ -121,15 +121,15 @@ Then in the web UI at `http://<server-ip>:2283`:
    ```
    ./scripts/redate-album.py "1999-07-07 Hal's Birthday" 1999-07-07 --apply
    ```
-   Scans with *no* known date use a sentinel: `1970-01-01` means "date unknown". Two layers:
-   - Immich catalog: `./scripts/redate-album.py "Early_years" 1970-01-01 --apply`
-   - The files themselves (EXIF + filename prefix), run against the **USB source**, never the Immich library: `./scripts/stamp-unknown-date.sh /mnt/usb/Pictures/Early_years --apply`
-
-   Stamping changes file hashes — re-importing a stamped folder duplicates its photos unless the album's assets are deleted from Immich first.
+   Scans with *no* known date use a sentinel — `1970-01-01` means "date unknown":
+   ```
+   ./scripts/redate-album.py "Early_years" 1970-01-01 --apply
+   ```
+   (Immich's database is the source of truth — filenames/EXIF are deliberately not rewritten. `scripts/stamp-unknown-date.sh` exists for stamping *pre-import* source folders, but changes file hashes: never re-import a stamped folder without deleting its assets from Immich first.)
 5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
 6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
-App state (Postgres, ML model cache) lives in `/srv/immich/` — regenerable, not part of the data backup.
+**Immich is the source of truth** — date corrections, albums, and edits live in its database, not in the files (filenames/EXIF are not kept in sync; a re-import from files would lose all corrections). Immich's automatic daily DB dumps (Administration → Settings → Backup Settings — verify enabled) land in `/srv/data/immich/backups`, so the wholesale `/srv/data` backup captures both files and database. Live app state (`/srv/immich/`: Postgres, model cache) is restorable from those dumps and stays outside the backup.
 
 ## 8. OpenAI API (for projects)
 
@@ -158,3 +158,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-22: Added `scripts/fix-dates-from-filenames.py` — corrects Immich dates for old videos with no creation metadata, using `YYYY_MM_DD_HHMM` filenames as ground truth.
 - 2026-07-25: Added `scripts/redate-album.py` — sets every asset in an album to a given date (for scans/digitized photos where the album name is the real date).
 - 2026-07-25: Added `scripts/stamp-unknown-date.sh` — writes the 1970-01-01 "date unknown" sentinel into EXIF + filenames of source files. Import script now maps loose root files to an album named after the source folder.
+- 2026-07-25: Decision: Immich's database is the source of truth for dates/albums (files are not kept in sync). Daily DB dumps into `/srv/data/immich/backups` make the `/srv/data` backup capture everything.
