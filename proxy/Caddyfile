@@ -1,0 +1,28 @@
+# One wildcard cert for *.100b.amokamok.com via Cloudflare DNS-01 —
+# no ports open to the internet, certs renew automatically.
+# Add an app: copy a matcher+handle pair, then add its card to the landing page.
+{
+	email brent@sauron.systems
+}
+
+*.100b.amokamok.com, 100b.amokamok.com {
+	tls {
+		dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	}
+
+	@immich host immich.100b.amokamok.com
+	handle @immich {
+		reverse_proxy localhost:2283
+	}
+
+	@ha host ha.100b.amokamok.com
+	handle @ha {
+		reverse_proxy localhost:8123
+	}
+
+	# default: the landing page
+	handle {
+		root * /srv/site
+		file_server
+	}
+}

@@ -143,15 +143,9 @@ Prompts for the key (hidden input — never in shell history, never in this repo
 
 An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hosted API. If it was ever started, `./scripts/remove-ollama.sh` cleans it off the server (containers, model volumes, images).
 
-## 9. Landing page (port 80)
+## 9. Landing page
 
-Dashboard linking to everything on (and around) the server:
-
-```
-./landing/setup.sh
-```
-
-nginx serves `landing/site/` straight from the repo checkout (bind mount), so updating the page is: edit the `services` array in `landing/site/index.html`, commit, `git pull` on the server, refresh — no container restart. Same-host apps take a `port` (links follow whatever hostname/IP you browsed by); other devices (printer, router, Home Assistant) take a full `url` — commented examples included. Each card gets a live reachability dot.
+"100 Bosworth" dashboard at `https://100b.amokamok.com`, linking to everything on (and around) the server. Served by the Caddy proxy (section 11) straight from `landing/site/` in the repo checkout, so updating the page is: edit the `services` array in `landing/site/index.html`, commit, `git pull` on the server, refresh — no container restart. Same-host apps take a `url` (their HTTPS name); network devices (printer, router, cameras) take their IP `url`. Each card gets a live reachability dot.
 
 ## 10. SSH keys
 
@@ -162,6 +156,22 @@ From the Mac (one-time): `ssh-copy-id bwilliams@192.168.0.190`, confirm password
 ```
 
 Disables password and root SSH logins (drop-in at `/etc/ssh/sshd_config.d/99-hardening.conf`). The script refuses to run until an authorized key is installed, so it can't lock you out.
+
+## 11. DNS + HTTPS (Caddy reverse proxy)
+
+Every app gets a real name with a real cert, LAN-only: `https://100b.amokamok.com` (landing), `https://immich.100b.amokamok.com`, `https://ha.100b.amokamok.com`, … One wildcard cert for `*.100b.amokamok.com` via Cloudflare DNS-01 — proves domain ownership through the API, so **no ports are opened to the internet** and renewal is automatic.
+
+```
+./proxy/setup.sh
+```
+
+Prompts once for a Cloudflare API token ("Edit zone DNS" template scoped to `amokamok.com`, plus Zone→Zone→Read; stored in `proxy/.env`, gitignored), upserts the DNS records (`100b` and `*.100b` → the server's LAN IP, DNS-only/grey-cloud), builds Caddy with the Cloudflare DNS plugin, and replaces the old nginx landing container.
+
+Add an app behind the proxy: one matcher+handle pair in `proxy/Caddyfile`, then `cd proxy && sudo docker compose up -d --force-recreate` (config is a bind mount — no rebuild), plus a card on the landing page.
+
+## 12. Remote access
+
+UniFi WireGuard ("One-Click VPN" on the gateway) — no services are exposed to the internet. Add devices in the UniFi console → Settings → VPN. The `*.100b.amokamok.com` names resolve publicly (to the private LAN IP), so the same HTTPS URLs work at home and over the VPN, including Immich mobile sync.
 
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
@@ -180,3 +190,4 @@ Disables password and root SSH logins (drop-in at `/etc/ssh/sshd_config.d/99-har
 - 2026-07-25: Added `scripts/stamp-unknown-date.sh` — writes the 1970-01-01 "date unknown" sentinel into EXIF + filenames of source files. Import script now maps loose root files to an album named after the source folder.
 - 2026-07-25: Decision: Immich's database is the source of truth for dates/albums (files are not kept in sync). Daily DB dumps into `/srv/data/immich/backups` make the `/srv/data` backup capture everything.
 - 2026-07-25: Added landing page (`landing/`) — nginx on port 80 serving a repo-managed dashboard of all server apps and network devices.
+- 2026-07-25: Added SSH hardening (`scripts/harden-ssh.sh`) and the Caddy proxy (`proxy/`) — wildcard HTTPS for `*.100b.amokamok.com` via Cloudflare DNS-01, LAN-only, replaces the nginx landing container. Remote access: UniFi WireGuard (no exposed ports).
