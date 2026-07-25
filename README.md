@@ -153,6 +153,16 @@ Dashboard linking to everything on (and around) the server:
 
 nginx serves `landing/site/` straight from the repo checkout (bind mount), so updating the page is: edit the `services` array in `landing/site/index.html`, commit, `git pull` on the server, refresh — no container restart. Same-host apps take a `port` (links follow whatever hostname/IP you browsed by); other devices (printer, router, Home Assistant) take a full `url` — commented examples included. Each card gets a live reachability dot.
 
+## 10. SSH keys
+
+From the Mac (one-time): `ssh-copy-id bwilliams@192.168.0.190`, confirm passwordless `ssh 100bsa` works (Mac `~/.ssh/config` has the `100bsa` host alias), then on the server:
+
+```
+./scripts/harden-ssh.sh
+```
+
+Disables password and root SSH logins (drop-in at `/etc/ssh/sshd_config.d/99-hardening.conf`). The script refuses to run until an authorized key is installed, so it can't lock you out.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
