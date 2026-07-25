@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Server</title>
+<style>
+  :root { color-scheme: dark light; }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: #0f1115; color: #e6e8eb;
+    min-height: 100vh; padding: 3rem 1.5rem;
+  }
+  header { max-width: 60rem; margin: 0 auto 2.5rem; }
+  h1 { font-size: 1.6rem; font-weight: 650; letter-spacing: -0.02em; }
+  header p { color: #8b929c; margin-top: 0.35rem; font-size: 0.95rem; }
+  main {
+    max-width: 60rem; margin: 0 auto; display: grid; gap: 1rem;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  }
+  .card {
+    display: flex; flex-direction: column; gap: 0.3rem; position: relative;
+    background: #171a21; border: 1px solid #262b35; border-radius: 12px;
+    padding: 1.1rem 1.25rem; text-decoration: none; color: inherit;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: #4a566b; transform: translateY(-2px); }
+  .icon { font-size: 1.6rem; line-height: 1; margin-bottom: 0.4rem; }
+  .name { font-weight: 600; }
+  .desc { color: #8b929c; font-size: 0.85rem; }
+  .dot {
+    position: absolute; top: 1rem; right: 1rem;
+    width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #3a4150;
+  }
+  .dot.up { background: #38b26a; }
+  .dot.down { background: #c74e4e; }
+  @media (prefers-color-scheme: light) {
+    body { background: #f4f5f7; color: #1c2026; }
+    .card { background: #ffffff; border-color: #dde1e7; }
+    .card:hover { border-color: #a8b2c0; }
+    .desc, header p { color: #5d6570; }
+    .dot { background: #cdd3db; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="host">Home Server</h1>
+  <p>Minisforum MS-01 &middot; everything running on this box, one click away</p>
+</header>
+<main id="grid"></main>
+
+<script>
+// Add a service: one entry here, commit, `git pull` on the server, refresh.
+// Same-host apps: give a `port`. Other devices on the network: give a `url`.
+const services = [
+  { name: "Immich", desc: "Picture server — photos & videos", icon: "📷", port: 2283 },
+  // { name: "Home Assistant", desc: "Home automation",   icon: "🏠", url: "http://homeassistant.local:8123" },
+  // { name: "Printer",        desc: "Print queue & ink",  icon: "🖨️", url: "http://192.168.1.xx" },
+  // { name: "Router",         desc: "Network admin",      icon: "🌐", url: "http://192.168.1.1" },
+];
+
+document.getElementById("host").textContent = location.hostname || "Home Server";
+
+const grid = document.getElementById("grid");
+for (const s of services) {
+  const href = s.url ?? `http://${location.hostname}:${s.port}`;
+  const a = document.createElement("a");
+  a.className = "card";
+  a.href = href;
+  a.innerHTML = `<span class="dot"></span><span class="icon"></span>
+    <span class="name"></span><span class="desc"></span>`;
+  a.querySelector(".icon").textContent = s.icon;
+  a.querySelector(".name").textContent = s.name;
+  a.querySelector(".desc").textContent = s.desc;
+  grid.appendChild(a);
+
+  // reachability dot: no-cors fetch succeeds opaquely if something answers
+  const ctl = new AbortController();
+  setTimeout(() => ctl.abort(), 4000);
+  fetch(href, { mode: "no-cors", signal: ctl.signal })
+    .then(() => a.querySelector(".dot").classList.add("up"))
+    .catch(() => a.querySelector(".dot").classList.add("down"));
+}
+</script>
+</body>
+</html>

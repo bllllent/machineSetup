@@ -1,0 +1,12 @@
+name: landing
+
+services:
+  landing:
+    image: nginx:alpine
+    container_name: landing
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      # bind-mounted from the repo checkout: git pull updates the page live
+      - ./site:/usr/share/nginx/html:ro

@@ -143,6 +143,16 @@ Prompts for the key (hidden input — never in shell history, never in this repo
 
 An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hosted API. If it was ever started, `./scripts/remove-ollama.sh` cleans it off the server (containers, model volumes, images).
 
+## 9. Landing page (port 80)
+
+Dashboard linking to everything on (and around) the server:
+
+```
+./landing/setup.sh
+```
+
+nginx serves `landing/site/` straight from the repo checkout (bind mount), so updating the page is: edit the `services` array in `landing/site/index.html`, commit, `git pull` on the server, refresh — no container restart. Same-host apps take a `port` (links follow whatever hostname/IP you browsed by); other devices (printer, router, Home Assistant) take a full `url` — commented examples included. Each card gets a live reachability dot.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -159,3 +169,4 @@ An Ollama + Open WebUI stack was briefly added, then dropped in favor of the hos
 - 2026-07-25: Added `scripts/redate-album.py` — sets every asset in an album to a given date (for scans/digitized photos where the album name is the real date).
 - 2026-07-25: Added `scripts/stamp-unknown-date.sh` — writes the 1970-01-01 "date unknown" sentinel into EXIF + filenames of source files. Import script now maps loose root files to an album named after the source folder.
 - 2026-07-25: Decision: Immich's database is the source of truth for dates/albums (files are not kept in sync). Daily DB dumps into `/srv/data/immich/backups` make the `/srv/data` backup capture everything.
+- 2026-07-25: Added landing page (`landing/`) — nginx on port 80 serving a repo-managed dashboard of all server apps and network devices.
