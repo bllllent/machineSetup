@@ -1,0 +1,98 @@
+#!/usr/bin/env python3
+"""Share ALL albums you own with another Immich user (family member).
+Partner sharing covers the timeline but NOT albums — this fills the gap.
+
+    ./share-albums.py user@email            # dry run
+    ./share-albums.py user@email --apply    # share
+    ./share-albums.py user@email --editor --apply   # let them add/organize
+
+Idempotent: albums already shared with that user are skipped, so re-run it
+after importing new folders. Uses the API key from ~/.config/immich/env.
+"""
+import json
+import os
+import sys
+import urllib.request
+
+API = os.environ.get("IMMICH_URL", "http://localhost:2283/api")
+
+key = os.environ.get("IMMICH_API_KEY")
+env_path = os.path.expanduser("~/.config/immich/env")
+if not key and os.path.exists(env_path):
+    with open(env_path) as f:
+        for line in f:
+            if line.startswith("IMMICH_API_KEY="):
+                key = line.strip().split("=", 1)[1]
+if not key:
+    sys.exit("No IMMICH_API_KEY found (run scripts/import-photos.sh once, or export it).")
+
+args = [a for a in sys.argv[1:] if not a.startswith("--")]
+APPLY = "--apply" in sys.argv
+ROLE = "editor" if "--editor" in sys.argv else "viewer"
+if len(args) != 1:
+    sys.exit("Usage: share-albums.py <user-email> [--editor] [--apply]")
+target_email = args[0].lower()
+
+
+class ApiError(Exception):
+    def __init__(self, code, detail):
+        self.code = code
+        super().__init__(f"HTTP {code}: {detail}")
+
+
+def req(method, path, body=None):
+    r = urllib.request.Request(
+        API + path,
+        method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"x-api-key": key, "Content-Type": "application/json",
+                 "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(r) as resp:
+            return json.loads(resp.read() or "{}")
+    except urllib.error.HTTPError as e:
+        raise ApiError(e.code, e.read().decode(errors="replace")) from None
+
+
+me = req("GET", "/users/me")
+users = req("GET", "/users")
+target = next((u for u in users if u.get("email", "").lower() == target_email), None)
+if not target:
+    sys.exit(f"No user with email {target_email}. Users: "
+             + ", ".join(u.get("email", "?") for u in users))
+if target["id"] == me["id"]:
+    sys.exit("That's you — pick the family member's account.")
+
+
+def shared_user_ids(album):
+    ids = {u.get("user", {}).get("id") for u in album.get("albumUsers", [])}
+    ids |= {u.get("id") for u in album.get("sharedUsers", [])}
+    ids.discard(None)
+    return ids
+
+
+def share(album_id):
+    try:
+        req("PUT", f"/albums/{album_id}/users",
+            {"albumUsers": [{"userId": target["id"], "role": ROLE}]})
+    except ApiError:
+        # older API shape
+        req("PUT", f"/albums/{album_id}/users", {"sharedUserIds": [target["id"]]})
+
+
+albums = req("GET", "/albums")
+mine = [a for a in albums if a.get("ownerId") == me["id"]]
+todo = [a for a in mine if target["id"] not in shared_user_ids(a)]
+done = len(mine) - len(todo)
+
+for album in todo:
+    print(f'{"sharing" if APPLY else "would share"}: {album["albumName"]}')
+    if APPLY:
+        share(album["id"])
+
+verb = "Shared" if APPLY else "Would share"
+print(f"\n{len(mine)} albums owned. {verb} {len(todo)} with {target_email} "
+      f"as {ROLE}; already shared: {done}.")
+if not APPLY and todo:
+    print("Dry run — re-run with --apply to share.")
