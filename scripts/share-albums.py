@@ -81,8 +81,26 @@ def share(album_id):
         req("PUT", f"/albums/{album_id}/users", {"sharedUserIds": [target["id"]]})
 
 
+def owner_id(album):
+    return album.get("ownerId") or album.get("owner", {}).get("id")
+
+
 albums = req("GET", "/albums")
-mine = [a for a in albums if a.get("ownerId") == me["id"]]
+if isinstance(albums, dict):  # some versions wrap the list
+    albums = albums.get("albums", [])
+
+print(f'API key authenticates as: {me.get("email", me.get("id"))}')
+print(f"Albums visible: {len(albums)}")
+
+mine = [a for a in albums if owner_id(a) == me["id"]]
+if not mine and albums:
+    owners = {owner_id(a) for a in albums}
+    by_id = {u["id"]: u.get("email", "?") for u in users}
+    print("None are owned by this key's user. Album owners found: "
+          + ", ".join(by_id.get(o, str(o)) for o in owners))
+    sys.exit("Create the API key from the account that owns the albums, "
+             "or export IMMICH_API_KEY with that account's key.")
+
 todo = [a for a in mine if target["id"] not in shared_user_ids(a)]
 done = len(mine) - len(todo)
 
