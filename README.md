@@ -155,7 +155,7 @@ From the Mac (one-time): `ssh-copy-id bwilliams@192.168.0.190`, confirm password
 ./scripts/harden-ssh.sh
 ```
 
-Disables password and root SSH logins (drop-in at `/etc/ssh/sshd_config.d/99-hardening.conf`). The script refuses to run until an authorized key is installed, so it can't lock you out.
+SSH becomes key-only **except from inside the house**: password login stays allowed from the LAN subnets (192.168.0.x / 192.168.10.x) as break-glass in case the machine holding the keys is lost. Root login disabled everywhere; the physical console (keyboard + HDMI) is unaffected and always accepts the password. Drop-in at `/etc/ssh/sshd_config.d/99-hardening.conf`; the script refuses to run until an authorized key is installed, so it can't lock you out.
 
 ## 11. DNS + HTTPS (Caddy reverse proxy)
 
