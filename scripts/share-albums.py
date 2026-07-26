@@ -94,23 +94,42 @@ print(f"Albums visible: {len(albums)}")
 
 mine = [a for a in albums if owner_id(a) == me["id"]]
 if not mine and albums:
-    owners = {owner_id(a) for a in albums}
-    by_id = {u["id"]: u.get("email", "?") for u in users}
-    print("None are owned by this key's user. Album owners found: "
-          + ", ".join(by_id.get(o, str(o)) for o in owners))
-    sys.exit("Create the API key from the account that owns the albums, "
-             "or export IMMICH_API_KEY with that account's key.")
+    # this API version omits owner info from the list response — fetch each
+    # album's detail, which carries owner and current shares
+    print("List response omits owner info — checking album details "
+          f"({len(albums)} albums, may take a minute)...")
+    for i, a in enumerate(albums, 1):
+        detail = req("GET", f"/albums/{a['id']}")
+        if owner_id(detail) == me["id"]:
+            a["albumUsers"] = detail.get("albumUsers", [])
+            a["sharedUsers"] = detail.get("sharedUsers", [])
+            mine.append(a)
+        if i % 200 == 0:
+            print(f"  ...{i}/{len(albums)}")
+    if not mine:
+        owners = {owner_id(a) for a in albums}
+        by_id = {u["id"]: u.get("email", "?") for u in users}
+        print("None are owned by this key's user. Album owners found: "
+              + ", ".join(by_id.get(o, str(o)) for o in owners))
+        sys.exit("Create the API key from the account that owns the albums, "
+                 "or export IMMICH_API_KEY with that account's key.")
 
 todo = [a for a in mine if target["id"] not in shared_user_ids(a)]
 done = len(mine) - len(todo)
 
+failed = 0
 for album in todo:
     print(f'{"sharing" if APPLY else "would share"}: {album["albumName"]}')
     if APPLY:
-        share(album["id"])
+        try:
+            share(album["id"])
+        except ApiError as e:
+            failed += 1
+            print(f"  FAILED: {e}")
 
 verb = "Shared" if APPLY else "Would share"
-print(f"\n{len(mine)} albums owned. {verb} {len(todo)} with {target_email} "
-      f"as {ROLE}; already shared: {done}.")
+print(f"\n{len(mine)} albums owned. {verb} {len(todo) - failed} with {target_email} "
+      f"as {ROLE}; already shared: {done}"
+      + (f"; FAILED: {failed}" if failed else "") + ".")
 if not APPLY and todo:
     print("Dry run — re-run with --apply to share.")
