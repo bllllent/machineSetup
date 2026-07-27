@@ -126,6 +126,11 @@ Then in the web UI at `http://<server-ip>:2283`:
    ./scripts/redate-album.py "Early_years" 1970-01-01 --apply
    ```
    (Immich's database is the source of truth — filenames/EXIF are deliberately not rewritten. `scripts/stamp-unknown-date.sh` exists for stamping *pre-import* source folders, but changes file hashes: never re-import a stamped folder without deleting its assets from Immich first.)
+
+   Approximate GPS for a whole album (e.g. scans from a trip), written to Immich **and** `.xmp` sidecars next to the originals so it survives an app change (originals untouched, hashes stay valid; photos that already have real GPS are skipped unless `--force`):
+   ```
+   ./scripts/set-album-location.py "2009-11 Banff" --place "Banff, Canada" --apply
+   ```
 5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
 6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
