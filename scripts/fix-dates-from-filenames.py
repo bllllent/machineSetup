@@ -26,7 +26,7 @@ import os
 import re
 import sys
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 API = os.environ.get("IMMICH_URL", "http://localhost:2283/api")
@@ -46,10 +46,17 @@ TZ = ZoneInfo(os.environ.get("PHOTO_TZ", "America/Los_Angeles"))
 
 PATTERNS = [
     re.compile(r"^(\d{4})_(\d{2})_(\d{2})_(\d{2})(\d{2})\.\w+$", re.IGNORECASE),
-    re.compile(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})\.\w+$", re.IGNORECASE),
+    # optional suffix covers export names like 20241017_131339_IMG_2508.jpg
+    re.compile(r"^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})(?:[_-].*)?\.\w+$",
+               re.IGNORECASE),
     re.compile(r"^(?:IMG|VID|PXL)[-_](\d{4})(\d{2})(\d{2})[-_](\d{2})(\d{2})(\d{2})\.\w+$",
                re.IGNORECASE),
 ]
+
+
+def parse_local(s):
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})", s or "")
+    return datetime(*(int(g) for g in m.groups())) if m else None
 
 
 def date_from_name(name):
@@ -107,7 +114,7 @@ def search_page(page):
     sys.exit(f"Asset search failed. Server said:\n{last}")
 
 
-page, checked, already_ok = 1, 0, 0
+page, checked, already_ok, tz_shift, time_odd = 1, 0, 0, 0, 0
 mismatched = []  # (dt, have_date, asset_id, filename)
 while page:
     result = search_page(int(page))
@@ -117,11 +124,24 @@ while page:
         dt = date_from_name(asset.get("originalFileName"))
         if dt is None:
             continue
-        have = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")[:10]
-        if have == dt.date().isoformat():
+        have_s = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")
+        have = parse_local(have_s)
+        want = dt.replace(tzinfo=None)
+        want_utc = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        entry = (dt, have_s[:10], asset["id"], asset["originalFileName"])
+        if have and abs((have - want).total_seconds()) <= 120:
             already_ok += 1
-            continue
-        mismatched.append((dt, have, asset["id"], asset["originalFileName"]))
+        elif have and abs((have - want_utc).total_seconds()) <= 120:
+            # Immich shows the UTC wall-clock of the filename's local time —
+            # same instant, wrong rendering (imported while server ran UTC)
+            tz_shift += 1
+            mismatched.append(entry)
+        elif have is None or have.date() != dt.date():
+            mismatched.append(entry)
+        else:
+            # same day but a time difference that isn't the timezone
+            # signature — ambiguous, leave alone
+            time_odd += 1
     page = assets.get("nextPage")
 
 # Burst guard: many files whose FILENAME times are seconds apart, while their
@@ -156,7 +176,9 @@ for dt, have, asset_id, name in mismatched:
             {"dateTimeOriginal": dt.isoformat(timespec="milliseconds")})
 
 verb = "Fixed" if APPLY else "Would fix"
-print(f"\nChecked {checked} assets. {verb} {fixed}; skipped as likely batch "
-      f"exports: {len(skip_ids)}; already correct: {already_ok}.")
+print(f"\nChecked {checked} assets. {verb} {fixed} (of which timezone-only "
+      f"corrections: ~{tz_shift}); skipped as likely batch exports: "
+      f"{len(skip_ids)}; same-day odd times left alone: {time_odd}; "
+      f"already correct: {already_ok}.")
 if not APPLY and fixed:
     print("Dry run — re-run with --apply to write the changes.")
