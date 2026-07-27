@@ -107,7 +107,8 @@ def search_page(page):
     sys.exit(f"Asset search failed. Server said:\n{last}")
 
 
-page, checked, mismatched, already_ok = 1, 0, 0, 0
+page, checked, already_ok = 1, 0, 0
+mismatched = []  # (dt, have_date, asset_id, filename)
 while page:
     result = search_page(int(page))
     assets = result["assets"]
@@ -116,20 +117,46 @@ while page:
         dt = date_from_name(asset.get("originalFileName"))
         if dt is None:
             continue
-        want_date = dt.date().isoformat()
-        have = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")
-        if have[:10] == want_date:
+        have = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")[:10]
+        if have == dt.date().isoformat():
             already_ok += 1
             continue
-        mismatched += 1
-        print(f"{asset['originalFileName']}: {have[:10] or '??'} -> "
-              f"{want_date} {dt:%H:%M:%S}")
-        if APPLY:
-            req("PUT", f"/assets/{asset['id']}",
-                {"dateTimeOriginal": dt.isoformat(timespec="milliseconds")})
+        mismatched.append((dt, have, asset["id"], asset["originalFileName"]))
     page = assets.get("nextPage")
 
+# Burst guard: many files whose FILENAME times are seconds apart, while their
+# current dates disagree with each other, are batch exports — the filename is
+# the export time, not the capture time, and the current (spread) dates came
+# from real embedded metadata. Never overwrite those.
+mismatched.sort(key=lambda m: m[0])
+skip_ids = set()
+i = 0
+while i < len(mismatched):
+    j = i
+    while (j + 1 < len(mismatched)
+           and (mismatched[j + 1][0] - mismatched[j][0]).total_seconds() <= 120):
+        j += 1
+    group = mismatched[i:j + 1]
+    if len(group) >= 3 and len({m[1] for m in group}) > 1:
+        skip_ids.update(m[2] for m in group)
+        print(f"SKIPPING likely batch-export group of {len(group)}: "
+              f"{group[0][3]} .. {group[-1][3]} (filename times seconds apart, "
+              f"current dates organically spread — filename is probably the "
+              f"export time, not capture time)")
+    i = j + 1
+
+fixed = 0
+for dt, have, asset_id, name in mismatched:
+    if asset_id in skip_ids:
+        continue
+    fixed += 1
+    print(f"{name}: {have or '??'} -> {dt.date().isoformat()} {dt:%H:%M:%S}")
+    if APPLY:
+        req("PUT", f"/assets/{asset_id}",
+            {"dateTimeOriginal": dt.isoformat(timespec="milliseconds")})
+
 verb = "Fixed" if APPLY else "Would fix"
-print(f"\nChecked {checked} assets. {verb} {mismatched}; already correct: {already_ok}.")
-if not APPLY and mismatched:
+print(f"\nChecked {checked} assets. {verb} {fixed}; skipped as likely batch "
+      f"exports: {len(skip_ids)}; already correct: {already_ok}.")
+if not APPLY and fixed:
     print("Dry run — re-run with --apply to write the changes.")
