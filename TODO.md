@@ -1,0 +1,30 @@
+# TODO
+
+## Photo memories digest — blocked on Google SMTP
+
+1. **Create a Google App Password** (the SMTP login — regular password won't work):
+   - Google Account → Security → 2-Step Verification (must be on) → App passwords
+   - Create one named `photo-digest`, copy the 16-character password
+2. On the server:
+   ```
+   cd ~/machineSetup && git pull
+   ./automations/photo-digest/setup.sh        # paste app password at the SMTP prompt
+   ```
+3. Check the timer fires at a sane local hour — `timedatectl`; if the server is on UTC:
+   ```
+   sudo timedatectl set-timezone America/Los_Angeles
+   ```
+4. Test:
+   ```
+   ./automations/photo-digest/photo_digest.py --dry-run   # no email
+   ./automations/photo-digest/photo_digest.py             # real send
+   ```
+
+## Parked / future
+
+- Revisit backups as a whole (photos currently: USB in drawer + Immich daily DB dumps in `/srv/data/immich/backups`) — candidate: `scripts/backup-to-usb.sh`
+- Home Assistant install (`ha.100b.amokamok.com` + landing card already wired)
+- WireGuard profiles for family phones (UniFi console → Settings → VPN) so Immich mobile sync works away from home
+- More automations on the photo-digest template: network watchdog, server health reporter
+- Identify `middlesea` (Supermicro server) and `thermal-pi` — landing cards if they serve UIs
+- Wyze Hub on odd subnet 10.20.10.185 — check in UniFi console
