@@ -35,6 +35,16 @@
    ./automations/photo-digest/photo_digest.py             # real send
    ```
 
+## Photo date cleanup — PAUSED for manual review (filenames often wrong; album folders more accurate)
+
+State: 363 filename-based date fixes applied (Immich DB only). Timezone-shift batch NOT applied. **No sidecars written yet — do not run `sync-dates-to-sidecars.py --apply` until review is done** (it fossilizes Immich's current beliefs to disk).
+
+1. Review worklist: `./scripts/audit-album-dates.py` → summary + `~/album-date-audit.csv`
+2. Fix albums where the folder name is the truth: `./scripts/redate-album.py "ALBUM" YYYY-MM-DD --apply`
+3. Manual UI edits for the rest
+4. When satisfied: `./scripts/fix-dates-from-filenames.py` dry run (timezone batch — review whether filenames are trustworthy enough), then `./scripts/sync-dates-to-sidecars.py --apply` to persist everything to disk
+5. One-off to eyeball: `20210126_201442.avi` (filename is digitization date; content may be 2008)
+
 ## Parked / future
 
 - Revisit backups as a whole (photos currently: USB in drawer + Immich daily DB dumps in `/srv/data/immich/backups`) — candidate: `scripts/backup-to-usb.sh`
