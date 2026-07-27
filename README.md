@@ -131,6 +131,11 @@ Then in the web UI at `http://<server-ip>:2283`:
    ```
    ./scripts/set-album-location.py "2009-11 Banff" --place "Banff, Canada" --apply
    ```
+   Persist all Immich date corrections into sidecars the same way (whole-library sweep; only writes where the file on disk disagrees with Immich by >25h — re-run after future date fixes):
+   ```
+   ./scripts/sync-dates-to-sidecars.py            # dry run
+   ./scripts/sync-dates-to-sidecars.py --apply
+   ```
 5. Optional: Administration → Settings → Video Transcoding → enable Quick Sync (the iGPU is already passed through).
 6. Install the Immich mobile app and point it at the server URL for automatic phone backup — uploads land in the same `/srv/data/immich` library.
 
@@ -203,3 +208,4 @@ AI-powered scripts under `automations/`, each with its own `setup.sh` that insta
 - 2026-07-25: Added landing page (`landing/`) — nginx on port 80 serving a repo-managed dashboard of all server apps and network devices.
 - 2026-07-25: Added SSH hardening (`scripts/harden-ssh.sh`) and the Caddy proxy (`proxy/`) — wildcard HTTPS for `*.100b.amokamok.com` via Cloudflare DNS-01, LAN-only, replaces the nginx landing container. Remote access: UniFi WireGuard (no exposed ports).
 - 2026-07-26: Added `automations/photo-digest` — daily "on this day" memories email (Immich photos + OpenAI intro) on a systemd timer.
+- 2026-07-26: Metadata portability: `scripts/set-album-location.py` (album GPS → Immich + `.xmp` sidecars) and `scripts/sync-dates-to-sidecars.py` (all Immich date corrections → sidecars). Originals never modified.
