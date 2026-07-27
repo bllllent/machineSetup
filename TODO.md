@@ -1,5 +1,20 @@
 # TODO
 
+## DNS + HTTPS (Cloudflare + Caddy proxy)
+
+1. **Create a Cloudflare API token** (dashboard → My Profile → API Tokens → Create Token):
+   - "Edit zone DNS" template, scoped to `amokamok.com`
+   - Also add permission Zone → Zone → Read
+   - Copy the token (shown once)
+2. On the server:
+   ```
+   cd ~/machineSetup && git pull
+   ./proxy/setup.sh        # paste token; creates DNS records, builds Caddy (few min), replaces nginx landing
+   ```
+3. Verify the padlock: https://100b.amokamok.com and https://immich.100b.amokamok.com
+   (cert issuance takes ~a minute after start; `sudo docker logs caddy` if not)
+4. Point the Immich mobile app / bookmarks at `https://immich.100b.amokamok.com`
+
 ## Photo memories digest — blocked on Google SMTP
 
 1. **Create a Google App Password** (the SMTP login — regular password won't work):
