@@ -173,6 +173,12 @@ Add an app behind the proxy: one matcher+handle pair in `proxy/Caddyfile`, then 
 
 UniFi WireGuard ("One-Click VPN" on the gateway) — no services are exposed to the internet. Add devices in the UniFi console → Settings → VPN. The `*.100b.amokamok.com` names resolve publicly (to the private LAN IP), so the same HTTPS URLs work at home and over the VPN, including Immich mobile sync.
 
+## 13. Automations
+
+AI-powered scripts under `automations/`, each with its own `setup.sh` that installs a systemd timer. They read API keys from the `~/.config/*/env` files (never from the repo).
+
+- **photo-digest** — daily "on this day" email: photos from past years via the Immich API, a short OpenAI-written intro, inline thumbnails. `./automations/photo-digest/setup.sh` (prompts for SMTP once — Gmail needs an App Password), then test with `photo_digest.py --dry-run`. Sends nothing on days with no memories. Timer: 08:00 server time.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -191,3 +197,4 @@ UniFi WireGuard ("One-Click VPN" on the gateway) — no services are exposed to 
 - 2026-07-25: Decision: Immich's database is the source of truth for dates/albums (files are not kept in sync). Daily DB dumps into `/srv/data/immich/backups` make the `/srv/data` backup capture everything.
 - 2026-07-25: Added landing page (`landing/`) — nginx on port 80 serving a repo-managed dashboard of all server apps and network devices.
 - 2026-07-25: Added SSH hardening (`scripts/harden-ssh.sh`) and the Caddy proxy (`proxy/`) — wildcard HTTPS for `*.100b.amokamok.com` via Cloudflare DNS-01, LAN-only, replaces the nginx landing container. Remote access: UniFi WireGuard (no exposed ports).
+- 2026-07-26: Added `automations/photo-digest` — daily "on this day" memories email (Immich photos + OpenAI intro) on a systemd timer.
