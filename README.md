@@ -206,6 +206,7 @@ AI-powered scripts under `automations/`, each with its own `setup.sh` that insta
 - 2026-07-25: Added `scripts/stamp-unknown-date.sh` — writes the 1970-01-01 "date unknown" sentinel into EXIF + filenames of source files. Import script now maps loose root files to an album named after the source folder.
 - 2026-07-25: Decision: Immich's database is the source of truth for dates/albums (files are not kept in sync). Daily DB dumps into `/srv/data/immich/backups` make the `/srv/data` backup capture everything.
 - 2026-07-25: Added landing page (`landing/`) — nginx on port 80 serving a repo-managed dashboard of all server apps and network devices.
+- 2026-07-27: Added `scripts/bulk-redate-albums.py` — interactive pattern-matched album redating (y/n per album, date proposed from album name, assets with real EXIF within ±10 days kept). `redate-album.py` now sequences alphabetically a minute apart and writes sidecars.
 - 2026-07-25: Added SSH hardening (`scripts/harden-ssh.sh`) and the Caddy proxy (`proxy/`) — wildcard HTTPS for `*.100b.amokamok.com` via Cloudflare DNS-01, LAN-only, replaces the nginx landing container. Remote access: UniFi WireGuard (no exposed ports).
 - 2026-07-26: Added `automations/photo-digest` — daily "on this day" memories email (Immich photos + OpenAI intro) on a systemd timer.
 - 2026-07-26: Metadata portability: `scripts/set-album-location.py` (album GPS → Immich + `.xmp` sidecars) and `scripts/sync-dates-to-sidecars.py` (all Immich date corrections → sidecars). Originals never modified.
