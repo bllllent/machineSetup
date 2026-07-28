@@ -52,6 +52,7 @@ Timezone for assigned timestamps is `America/Los_Angeles` everywhere; override p
 | Script | What it does |
 |---|---|
 | `share-albums.py <email> [--editor] [--apply]` | Shares **all** albums you own with another Immich user (partner sharing covers the timeline but not albums — this fills the gap). Re-run after new imports; already-shared albums are skipped. |
+| `rename-albums.py [--apply]` | Renames albums from `YYYY-MM-DD_Description` to `Description YYYY-MM-DD` (underscores → spaces, date moves to the end). Collision-safe. The date-parsing scripts find dates anywhere in the name, so they keep working after the rename — but year patterns for `bulk-redate-albums.py` become `"*2004*"` instead of `"2004*"`. |
 
 ## Related, elsewhere in the repo
 

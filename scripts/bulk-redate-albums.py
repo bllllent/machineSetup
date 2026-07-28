@@ -101,16 +101,24 @@ def host_path(p):
 
 
 def name_date(name):
-    m = re.match(r"^(\d{4})(?:[-_.](\d{1,2}))?(?:[-_.](\d{1,2}))?\b", name or "")
-    if not m or not 1900 <= int(m.group(1)) <= 2035:
-        return None
-    y = int(m.group(1))
-    mo = int(m.group(2)) if m.group(2) and 1 <= int(m.group(2)) <= 12 else 1
-    d = int(m.group(3)) if m.group(3) and 1 <= int(m.group(3)) <= 31 else 1
-    try:
-        return date(y, mo, d)
-    except ValueError:
-        return date(y, mo, 1)
+    """Find a date anywhere in the album name — works for both
+    '2004-01-29 Mattawa' and 'Mattawa 2004-01-29' styles."""
+    name = name or ""
+    m = re.search(r"\b((?:19|20)\d{2})[-_.](\d{1,2})[-_.](\d{1,2})\b", name)
+    if m:
+        y, mo, d = (int(g) for g in m.groups())
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            try:
+                return date(y, mo, d)
+            except ValueError:
+                return date(y, mo, 1)
+    m = re.search(r"\b((?:19|20)\d{2})[-_.](\d{1,2})\b", name)
+    if m and 1 <= int(m.group(2)) <= 12:
+        return date(int(m.group(1)), int(m.group(2)), 1)
+    m = re.search(r"\b((?:19|20)\d{2})\b", name)
+    if m:
+        return date(int(m.group(1)), 1, 1)
+    return None
 
 
 def read_disk_dates(paths):

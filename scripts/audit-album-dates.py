@@ -76,23 +76,22 @@ def get_album_assets(album_id):
     return out
 
 
-NAME_DATE = re.compile(r"^(\d{4})(?:[-_.](\d{1,2}))?(?:[-_.](\d{1,2}))?\b")
-
-
 def album_date(name):
-    m = NAME_DATE.match(name or "")
-    if not m:
-        return None
-    y = int(m.group(1))
-    if not 1900 <= y <= 2035:
-        return None
-    mo = int(m.group(2)) if m.group(2) else None
-    d = int(m.group(3)) if m.group(3) else None
-    if mo and not 1 <= mo <= 12:
-        return None
-    if d and not 1 <= d <= 31:
-        return None
-    return (y, mo, d)
+    """Find a date anywhere in the album name — works for both
+    '2004-01-29 Mattawa' and 'Mattawa 2004-01-29' styles."""
+    name = name or ""
+    m = re.search(r"\b((?:19|20)\d{2})[-_.](\d{1,2})[-_.](\d{1,2})\b", name)
+    if m:
+        y, mo, d = (int(g) for g in m.groups())
+        if 1 <= mo <= 12 and 1 <= d <= 31:
+            return (y, mo, d)
+    m = re.search(r"\b((?:19|20)\d{2})[-_.](\d{1,2})\b", name)
+    if m and 1 <= int(m.group(2)) <= 12:
+        return (int(m.group(1)), int(m.group(2)), None)
+    m = re.search(r"\b((?:19|20)\d{2})\b", name)
+    if m:
+        return (int(m.group(1)), None, None)
+    return None
 
 
 def days_off(asset_date, ymd):
