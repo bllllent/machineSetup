@@ -63,6 +63,8 @@ Clones into `~/machineSetup`. This repo is the home for setup scripts/configs go
 - Docker + Docker Compose for all services (Immich, etc.) on one flat host.
 - No discrete GPU on the MS-01 — AI for projects uses the hosted OpenAI API (section 8) rather than local models.
 
+> **Script reference:** every script in `scripts/` is catalogued in [scripts/README.md](scripts/README.md) — conventions, usage, and what each one does.
+
 ## 5. Storage layout
 
 Two 1TB NVMe drives:
