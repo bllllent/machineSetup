@@ -33,11 +33,47 @@ if not key:
     sys.exit("No IMMICH_API_KEY found.")
 
 
-def req(path):
-    r = urllib.request.Request(API + path, headers={
-        "x-api-key": key, "Accept": "application/json"})
-    with urllib.request.urlopen(r, timeout=60) as resp:
-        return json.loads(resp.read() or "{}")
+class ApiError(Exception):
+    pass
+
+
+def req(method, path, body=None):
+    r = urllib.request.Request(API + path, method=method,
+        data=json.dumps(body).encode() if body is not None else None,
+        headers={"x-api-key": key, "Content-Type": "application/json",
+                 "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(r, timeout=60) as resp:
+            return json.loads(resp.read() or "{}")
+    except urllib.error.HTTPError as e:
+        raise ApiError(f"HTTP {e.code}: {e.read().decode(errors='replace')[:300]}") from None
+
+
+def get_album_assets(album_id):
+    """Album detail embeds assets in some Immich versions but not others —
+    fall back to a search filtered by album id (same fix as redate-album)."""
+    try:
+        assets = req("GET", f"/albums/{album_id}?withoutAssets=false").get("assets", [])
+    except ApiError:
+        assets = []
+    if assets:
+        return assets
+    out, page = [], 1
+    while page:
+        res = None
+        for p in ("/search/metadata", "/search/assets"):
+            try:
+                res = req("POST", p, {"albumIds": [album_id],
+                                      "page": int(page), "size": 250})
+                break
+            except ApiError:
+                continue
+        if res is None:
+            return out
+        chunk = res["assets"]
+        out.extend(chunk["items"])
+        page = chunk.get("nextPage")
+    return out
 
 
 NAME_DATE = re.compile(r"^(\d{4})(?:[-_.](\d{1,2}))?(?:[-_.](\d{1,2}))?\b")
@@ -76,16 +112,15 @@ def days_off(asset_date, ymd):
     return min(abs((asset_date - lo).days), abs((asset_date - hi).days))
 
 
-albums = req("/albums")
+albums = req("GET", "/albums")
 if isinstance(albums, dict):
     albums = albums.get("albums", [])
-print(f"{len(albums)} albums; fetching assets (may take a minute)...")
+print(f"{len(albums)} albums; fetching assets (may take a few minutes)...")
 
 rows = []
 for i, album in enumerate(albums, 1):
     name = album.get("albumName", "?")
-    detail = req(f"/albums/{album['id']}?withoutAssets=false")
-    assets = detail.get("assets", [])
+    assets = get_album_assets(album["id"])
     dates = []
     for a in assets:
         s = (a.get("localDateTime") or a.get("fileCreatedAt") or "")[:10]
@@ -113,12 +148,15 @@ with open(OUT, "w", newline="") as f:
     w.writeheader()
     w.writerows(rows)
 
-dated = [r for r in rows if r["name_date"] != "" and r["assets_off"] != ""]
+named = [r for r in rows if r["name_date"] != ""]
+dated = [r for r in named if r["assets_off"] != ""]
 clean = sum(1 for r in dated if r["assets_off"] == 0)
 messy = sorted((r for r in dated if r["assets_off"] != 0),
                key=lambda r: -r["assets_off"])
+empty = sum(1 for r in rows if r["assets"] == 0)
 
-print(f"\n{len(rows)} albums audited; {len(dated)} have a date in their name.")
+print(f"\n{len(rows)} albums audited; {len(named)} have a date in their name; "
+      f"{len(dated)} of those comparable (assets found); {empty} returned no assets.")
 print(f"Consistent with their name-date (±3 days): {clean}")
 print(f"\nWorst offenders (assets off vs name-date):")
 for r in messy[:20]:
