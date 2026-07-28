@@ -164,16 +164,35 @@ if APPLY and sidecars:
         subprocess.run(["sudo", "apt-get", "install", "-y",
                         "libimage-exiftool-perl"], check=True)
     print(f"==> Writing {len(sidecars)} .xmp sidecars (sudo)...")
+    seen, uniq = set(), []
+    for hp, dtv in sidecars:
+        if hp not in seen:
+            seen.add(hp)
+            uniq.append((hp, dtv))
+    for hp, _ in uniq:
+        sc = hp + ".xmp"
+        try:
+            if os.path.exists(sc) and os.path.getsize(sc) == 0:
+                subprocess.run(["sudo", "rm", "-f", sc], check=True)
+        except OSError:
+            pass
     with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as f:
-        for hp, exif_dt in sidecars:
+        for hp, dtv in uniq:
             f.write("-q\n-m\n-overwrite_original\n-srcfile\n%d%f.%e.xmp\n")
-            f.write(f"-XMP:DateTimeOriginal={exif_dt}\n{hp}\n-execute\n")
+            f.write(f"-XMP:DateTimeOriginal={dtv}\n{hp}\n-execute\n")
         argfile = f.name
     os.chmod(argfile, 0o644)
     try:
-        subprocess.run(["sudo", "exiftool", "-@", argfile], check=True)
+        run = subprocess.run(["sudo", "exiftool", "-@", argfile],
+                             capture_output=True, text=True)
     finally:
         os.unlink(argfile)
+    if run.returncode != 0:
+        errs = [l for l in (run.stderr or "").splitlines() if l.strip()]
+        print("WARNING: some sidecars failed (Immich itself was updated; "
+              "re-running retries them):")
+        for l in errs[:5]:
+            print(f"  {l}")
 
 verb = "Updated" if APPLY else "Would update"
 print(f"\n{len(assets)} assets in album. {verb} {changed} (Immich + "

@@ -161,15 +161,33 @@ if not APPLY:
 
 # ---- write sidecars in one exiftool process ------------------------------------
 print(f"\n==> Writing {len(divergent)} sidecars...")
+seen, uniq = set(), []
+for p, want_s, _ in divergent:
+    if p not in seen:
+        seen.add(p)
+        uniq.append((p, want_s))
+for p, _ in uniq:
+    sc = p + ".xmp"
+    try:
+        if os.path.exists(sc) and os.path.getsize(sc) == 0:
+            subprocess.run(["sudo", "rm", "-f", sc], check=True)
+    except OSError:
+        pass
 with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as f:
-    for p, want_s, _ in divergent:
+    for p, want_s in uniq:
         exif_dt = want_s[:10].replace("-", ":") + " " + want_s[11:]
         f.write("-q\n-m\n-overwrite_original\n-srcfile\n%d%f.%e.xmp\n")
         f.write(f"-XMP:DateTimeOriginal={exif_dt}\n{p}\n-execute\n")
     argfile = f.name
 os.chmod(argfile, 0o644)
 try:
-    subprocess.run(["sudo", "exiftool", "-@", argfile], check=True)
+    run = subprocess.run(["sudo", "exiftool", "-@", argfile],
+                         capture_output=True, text=True)
 finally:
     os.unlink(argfile)
-print(f"Done — {len(divergent)} sidecars written.")
+if run.returncode != 0:
+    errs = [l for l in (run.stderr or "").splitlines() if l.strip()]
+    print("WARNING: some sidecars failed (re-running retries them):")
+    for l in errs[:10]:
+        print(f"  {l}")
+print(f"Done — {len(uniq)} sidecars attempted.")
