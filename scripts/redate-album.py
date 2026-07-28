@@ -7,11 +7,14 @@ to each changed original (originals never modified — hashes stay valid).
     ./redate-album.py "ALBUM NAME" YYYY-MM-DD            # dry run
     ./redate-album.py "ALBUM NAME" YYYY-MM-DD --apply    # actually update
 
-Times are assigned starting at noon (America/Los_Angeles, override with
-PHOTO_TZ), one second apart in the assets' current order, so the album
-keeps a stable sort instead of 400 identical timestamps. Assets already on
-the target date are left untouched. Sidecars are written with sudo exiftool
-(library files are root-owned).
+Assets are processed in ALPHABETICAL filename order and timestamped one
+minute apart starting at noon (America/Los_Angeles, override with PHOTO_TZ),
+so chronological order matches filename order — right for digitized batches
+and camera-counter names. The spacing shrinks automatically for albums too
+large to fit noon..midnight at one minute each. Assets already on the target
+date keep their existing times (pass --all to re-sequence those too — only
+do that when their current times are junk, not real EXIF). Sidecars are
+written with sudo exiftool (library files are root-owned).
 Uses the API key stored by import-photos.sh (~/.config/immich/env).
 """
 import json
@@ -47,10 +50,11 @@ if not key and os.path.exists(env_path):
 if not key:
     sys.exit("No IMMICH_API_KEY found (run scripts/import-photos.sh once, or export it).")
 
-args = [a for a in sys.argv[1:] if a != "--apply"]
+args = [a for a in sys.argv[1:] if a not in ("--apply", "--all")]
 APPLY = "--apply" in sys.argv
+ALL = "--all" in sys.argv
 if len(args) != 2 or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", args[1]):
-    sys.exit('Usage: redate-album.py "ALBUM NAME" YYYY-MM-DD [--apply]')
+    sys.exit('Usage: redate-album.py "ALBUM NAME" YYYY-MM-DD [--all] [--apply]')
 album_name, target_date = args
 
 
@@ -118,19 +122,24 @@ if len(matches) > 1:
 album = matches[0]
 print(f'Album "{album["albumName"]}" reports {album.get("assetCount", "?")} assets.')
 assets = get_album_assets(album)
-assets.sort(key=lambda a: a.get("localDateTime") or a.get("fileCreatedAt") or "")
+assets.sort(key=lambda a: (a.get("originalFileName") or "").lower())
 
 y, mo, d = (int(x) for x in target_date.split("-"))
 base = datetime(y, mo, d, 12, 0, 0, tzinfo=TZ)
+# one minute apart in filename order; shrink to fit noon..midnight if needed
+window = 11 * 3600 + 59 * 60
+step = 60 if len(assets) * 60 <= window else max(1, window // len(assets))
+if step != 60:
+    print(f"Large album: spacing timestamps {step}s apart to fit the day.")
 
 changed = skipped = 0
 sidecars = []  # (host path, "YYYY:MM:DD HH:MM:SS")
 for i, asset in enumerate(assets):
     have = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")[:10]
-    if have == target_date:
+    if have == target_date and not ALL:
         skipped += 1
         continue
-    dt_i = base + timedelta(seconds=i)
+    dt_i = base + timedelta(seconds=i * step)
     print(f"{asset.get('originalFileName')}: {have or '??'} -> {dt_i:%Y-%m-%d %H:%M:%S}")
     if APPLY:
         try:
