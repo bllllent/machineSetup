@@ -196,7 +196,7 @@ if not matches:
     sys.exit(f'No albums match "{pattern}".')
 print(f'{len(matches)} album(s) match "{pattern}". Answers apply immediately.\n')
 
-applied = skipped = 0
+applied = skipped = clean = 0
 for album in matches:
     name = album.get("albumName", "?")
     assets = get_album_assets(album["id"])
@@ -206,6 +206,13 @@ for album in matches:
     paths = [host_path(a.get("originalPath") or "") for a in assets]
     disk = read_disk_dates([p for p in paths if p])
     target = name_date(name)
+
+    if target:
+        _, reseq0 = plan(assets, disk, target)
+        if not reseq0:
+            print(f"--- {name}: re-date 0 — already clean, skipping")
+            clean += 1
+            continue
 
     while True:
         if target:
@@ -222,7 +229,8 @@ for album in matches:
             print(f"--- {name}  ({len(assets)} assets) — no date in album name")
         ans = input("    [y]=apply  [n/enter]=skip  YYYY-MM-DD=other date  [q]=quit: ").strip()
         if ans.lower() == "q":
-            print(f"\nDone: {applied} applied, {skipped} skipped.")
+            print(f"\nDone: {applied} applied, {skipped} skipped, "
+                  f"{clean} already clean.")
             sys.exit(0)
         if ans == "" or ans.lower() == "n":
             skipped += 1
@@ -240,4 +248,4 @@ for album in matches:
             break
         print("    Answer y, n, q, or a YYYY-MM-DD date.")
 
-print(f"\nDone: {applied} applied, {skipped} skipped.")
+print(f"\nDone: {applied} applied, {skipped} skipped, {clean} already clean.")
