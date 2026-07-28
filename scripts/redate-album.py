@@ -1,20 +1,39 @@
 #!/usr/bin/env python3
 """Set the date of every asset in an Immich album (e.g. scanned/digitized
 photos whose file metadata is meaningless but whose album says when).
+Writes BOTH layers: Immich's database via the API, and an .xmp sidecar next
+to each changed original (originals never modified — hashes stay valid).
 
     ./redate-album.py "ALBUM NAME" YYYY-MM-DD            # dry run
     ./redate-album.py "ALBUM NAME" YYYY-MM-DD --apply    # actually update
 
-Times are assigned starting at 12:00:00, one second apart in the assets'
-current order, so the album keeps a stable sort instead of 400 identical
-timestamps. Assets already on the target date are left untouched.
+Times are assigned starting at noon (America/Los_Angeles, override with
+PHOTO_TZ), one second apart in the assets' current order, so the album
+keeps a stable sort instead of 400 identical timestamps. Assets already on
+the target date are left untouched. Sidecars are written with sudo exiftool
+(library files are root-owned).
 Uses the API key stored by import-photos.sh (~/.config/immich/env).
 """
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 import urllib.request
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+TZ = ZoneInfo(os.environ.get("PHOTO_TZ", "America/Los_Angeles"))
+# container path of the upload library -> host path
+PREFIXES = {"/data": "/srv/data/immich", "/usr/src/app/upload": "/srv/data/immich"}
+
+
+def host_path(p):
+    for c, h in PREFIXES.items():
+        if p and p.startswith(c + "/"):
+            return h + p[len(c):]
+    return p
 
 API = os.environ.get("IMMICH_URL", "http://localhost:2283/api")
 
@@ -101,24 +120,55 @@ print(f'Album "{album["albumName"]}" reports {album.get("assetCount", "?")} asse
 assets = get_album_assets(album)
 assets.sort(key=lambda a: a.get("localDateTime") or a.get("fileCreatedAt") or "")
 
+y, mo, d = (int(x) for x in target_date.split("-"))
+base = datetime(y, mo, d, 12, 0, 0, tzinfo=TZ)
+
 changed = skipped = 0
+sidecars = []  # (host path, "YYYY:MM:DD HH:MM:SS")
 for i, asset in enumerate(assets):
     have = (asset.get("localDateTime") or asset.get("fileCreatedAt") or "")[:10]
     if have == target_date:
         skipped += 1
         continue
-    hh, rem = divmod(i, 3600)
-    mi, ss = divmod(rem, 60)
-    new_dt = f"{target_date}T{12 + hh:02d}:{mi:02d}:{ss:02d}.000Z"
-    print(f"{asset.get('originalFileName')}: {have or '??'} -> {new_dt[:19]}")
+    dt_i = base + timedelta(seconds=i)
+    print(f"{asset.get('originalFileName')}: {have or '??'} -> {dt_i:%Y-%m-%d %H:%M:%S}")
     if APPLY:
         try:
-            req("PUT", f"/assets/{asset['id']}", {"dateTimeOriginal": new_dt})
+            req("PUT", f"/assets/{asset['id']}",
+                {"dateTimeOriginal": dt_i.isoformat(timespec="milliseconds")})
         except ApiError as e:
             sys.exit(f"PUT /assets/{asset['id']} -> {e}")
+        path = asset.get("originalPath")
+        if not path:
+            try:
+                path = req("GET", f"/assets/{asset['id']}").get("originalPath")
+            except ApiError:
+                path = None
+        hp = host_path(path)
+        if hp:
+            sidecars.append((hp, f"{dt_i:%Y:%m:%d %H:%M:%S}"))
     changed += 1
 
+if APPLY and sidecars:
+    if subprocess.run(["which", "exiftool"], capture_output=True).returncode != 0:
+        print("Installing exiftool...")
+        subprocess.run(["sudo", "apt-get", "install", "-y",
+                        "libimage-exiftool-perl"], check=True)
+    print(f"==> Writing {len(sidecars)} .xmp sidecars (sudo)...")
+    with tempfile.NamedTemporaryFile("w", suffix=".args", delete=False) as f:
+        for hp, exif_dt in sidecars:
+            f.write("-q\n-m\n-overwrite_original\n-srcfile\n%d%f.%e.xmp\n")
+            f.write(f"-XMP:DateTimeOriginal={exif_dt}\n{hp}\n-execute\n")
+        argfile = f.name
+    os.chmod(argfile, 0o644)
+    try:
+        subprocess.run(["sudo", "exiftool", "-@", argfile], check=True)
+    finally:
+        os.unlink(argfile)
+
 verb = "Updated" if APPLY else "Would update"
-print(f"\n{len(assets)} assets in album. {verb} {changed}; already on {target_date}: {skipped}.")
+print(f"\n{len(assets)} assets in album. {verb} {changed} (Immich + "
+      f"{len(sidecars) if APPLY else 'their'} sidecars); "
+      f"already on {target_date}: {skipped}.")
 if not APPLY and changed:
     print("Dry run — re-run with --apply to write the changes.")
