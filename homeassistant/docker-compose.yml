@@ -1,0 +1,70 @@
+name: homeassistant
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    # host networking: device discovery (mDNS/SSDP) sees the LAN, and Caddy
+    # proxies ha.100b.amokamok.com -> localhost:8123
+    network_mode: host
+    # Bluetooth management (habluetooth) needs these two capabilities
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      TZ: America/Los_Angeles
+    volumes:
+      - /srv/data/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      # BlueZ over D-Bus, for the Bluetooth integration if the host adapter is enabled
+      - /run/dbus:/run/dbus:ro
+
+  # Matter controller for Home Assistant (Nest thermostat and other Matter devices).
+  # Matter commissioning needs layer-2 adjacency (mDNS + IPv6 link-local), and the
+  # Matter devices live on the IoT wireless VLAN (11, 192.168.10.0/24). So this
+  # container gets its own macvlan foot on that VLAN instead of host networking;
+  # the server's switch port (Ithilien, USW Flex Mini) carries VLAN 11 tagged.
+  # HA (host network) reaches it routed via the gateway at ws://192.168.10.250:5580/ws
+  matter-server:
+    image: ghcr.io/home-assistant-libs/python-matter-server:stable
+    container_name: matter-server
+    restart: unless-stopped
+    networks:
+      iot:
+        ipv4_address: 192.168.10.250
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - /srv/data/matter:/data
+
+  # Gives the HOST (and therefore HA, which uses host networking) an address on the
+  # IoT wireless VLAN so broadcast/multicast discovery (Govee, Wemo, Tuya, ...)
+  # reaches devices there. Docker creates enp87s0.11 for the macvlan network above.
+  # The address goes on a macvlan "shim" child of that interface (not the interface
+  # itself) so the host can also talk to macvlan containers like matter-server;
+  # a plain address on the parent would be filtered by the macvlan driver. Host->
+  # matter-server still needs a hairpin through the gateway (/32 route), as the
+  # kernel does not bridge the shim to Docker's macvlan children here.
+  # Idempotent loop, no sudo (NET_ADMIN in the host namespace).
+  vlan-ip:
+    image: busybox:stable
+    container_name: vlan-ip
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    command: >
+      sh -c 'while true; do
+        if ip link show enp87s0.11 >/dev/null 2>&1; then
+          ip -4 addr show dev enp87s0.11 | grep -q "192.168.10.247/" && ip addr del 192.168.10.247/24 dev enp87s0.11;
+          ip link show iot-shim >/dev/null 2>&1 || { ip link add iot-shim link enp87s0.11 type macvlan mode bridge && echo "created iot-shim"; };
+          ip link set iot-shim up;
+          ip -4 addr show dev iot-shim | grep -q "192.168.10.247/" || { ip addr add 192.168.10.247/24 dev iot-shim && echo "added 192.168.10.247 to iot-shim"; };
+          ip route show 192.168.10.250 | grep -q via || { ip route replace 192.168.10.250/32 via 192.168.0.1 dev enp87s0 && echo "pinned route to matter-server via the gateway"; };
+        fi;
+        sleep 60; done'
+
+networks:
+  iot:
+    external: true   # docker network create -d macvlan --ipv6 --subnet 192.168.10.0/24 --gateway 192.168.10.1 --ip-range 192.168.10.248/29 --subnet fd00:100b:11::/64 -o parent=enp87s0.11 iot

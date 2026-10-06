@@ -191,6 +191,26 @@ AI-powered scripts under `automations/`, each with its own `setup.sh` that insta
 
 - **photo-digest** — daily "on this day" email: photos from past years via the Immich API, a short OpenAI-written intro, inline thumbnails. `./automations/photo-digest/setup.sh` (prompts for SMTP once — Gmail needs an App Password), then test with `photo_digest.py --dry-run`. Sends nothing on days with no memories. Timer: 08:00 server time.
 
+## 14. Home Assistant
+
+`homeassistant/docker-compose.yml` runs the official container (`ghcr.io/home-assistant/home-assistant:stable`) with host networking so device discovery (mDNS/SSDP, Bluetooth) sees the LAN, `NET_ADMIN`/`NET_RAW` for the Bluetooth stack, and D-Bus mounted read-only. UI at `http://192.168.0.190:8123`, and `https://ha.100b.amokamok.com` once the Caddy proxy is up (`configuration.yaml` already trusts the proxy on localhost).
+
+```
+cd ~/machineSetup/homeassistant && docker compose up -d
+```
+
+State lives in `/srv/data/homeassistant/config/` (bind mount). `.storage/` there holds users, tokens and UI-managed integrations, so it is covered by the wholesale `/srv/data` backup and never goes in this repo. Owner account `bwilliams`; its password and the `sxaas` long-lived API token are kept in the SXaaS repo's gitignored `properties/100BS/TOKENS.txt`, not here.
+
+Purpose: aggregate sensor data that SXaaS does not reach directly (Bluetooth, Wyze, anything with a Home Assistant integration but no local API) and expose it over HA's REST/websocket API. First integration: the Konnected GDO blaQ garage controller at 192.168.10.212 via ESPHome.
+
+Integrations so far (all added 2026-10-04): Konnected GDO blaQ (ESPHome, 192.168.10.212), Enphase Envoy solar (192.168.10.47, Enlighten login), LG ThinQ (WashTower washer + dryer, cloud PAT), Lutron Caseta (Smart Bridge 2 at 192.168.10.38, local, paired by button), Matter via the `matter-server` container below.
+
+Matter: `matter-server` (`ghcr.io/home-assistant-libs/python-matter-server:stable`) runs beside HA in the same compose file, state in `/srv/data/matter`; HA's Matter integration points at `ws://192.168.10.250:5580/ws`. Used for the 4th-gen Nest Learning Thermostat instead of Google's cloud SDM API. Matter commissioning needs layer-2 adjacency (the devices only advertise IPv6 link-local), and the Matter devices sit on the IoT wireless VLAN (VLAN 11, 192.168.10.0/24, `IOT_Wireless`), so the container does NOT use host networking: it has a Docker macvlan interface on `enp87s0.11` with the static address 192.168.10.250 (`docker network create -d macvlan --subnet 192.168.10.0/24 --gateway 192.168.10.1 --ip-range 192.168.10.248/29 -o parent=enp87s0.11 iot`). For that to work the server's port on the Flex Mini switch "Ithilien" carries tagged VLANs (port profile: native Private, tagged Allow All), changed 2026-10-04. Note VLAN 10 (`IOT_Wired`) is a different network; the 192.168.10.x devices are on VLAN 11.
+
+Host presence on the IoT VLAN: the `vlan-ip` sidecar (busybox, host network, `NET_ADMIN`) keeps a macvlan shim `iot-shim` on `enp87s0.11` with 192.168.10.247/24 so HA (host networking) can do broadcast/multicast discovery on the IoT VLAN (Govee LAN, Wemo, Tuya), and pins a /32 route to the matter-server container via the gateway, because the kernel does not bridge the shim to Docker's macvlan children. HA's network adapters are configured to `enp87s0` + `iot-shim`. Also added 2026-10-04: Wemo plug "Dishwasher" (192.168.10.80, pinned in `configuration.yaml`), Teslemetry (two Teslas, paid subscription), Nest Learning Thermostat 4th gen via Matter. The 10.20.10.x clients (Wyze hub, Roku TV) are not routable from the Private VLAN.
+
+Bluetooth: the MS-01's MediaTek adapter is `hci0`, but `bluetooth.service` is inactive on the host. Run `sudo systemctl enable --now bluetooth` before adding the Bluetooth integration.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -213,3 +233,4 @@ AI-powered scripts under `automations/`, each with its own `setup.sh` that insta
 - 2026-07-25: Added SSH hardening (`scripts/harden-ssh.sh`) and the Caddy proxy (`proxy/`) — wildcard HTTPS for `*.100b.amokamok.com` via Cloudflare DNS-01, LAN-only, replaces the nginx landing container. Remote access: UniFi WireGuard (no exposed ports).
 - 2026-07-26: Added `automations/photo-digest` — daily "on this day" memories email (Immich photos + OpenAI intro) on a systemd timer.
 - 2026-07-26: Metadata portability: `scripts/set-album-location.py` (album GPS → Immich + `.xmp` sidecars) and `scripts/sync-dates-to-sidecars.py` (all Immich date corrections → sidecars). Originals never modified.
+- 2026-10-04: Home Assistant (`homeassistant/`), container with host networking; config under `/srv/data/homeassistant`; blaQ added via ESPHome; later the same day Enphase, LG ThinQ, Lutron and a Matter server.

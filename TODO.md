@@ -48,7 +48,7 @@ State: 363 filename-based date fixes applied (Immich DB only). Timezone-shift ba
 ## Parked / future
 
 - Revisit backups as a whole (photos currently: USB in drawer + Immich daily DB dumps in `/srv/data/immich/backups`) — candidate: `scripts/backup-to-usb.sh`
-- Home Assistant install (`ha.100b.amokamok.com` + landing card already wired)
+- Home Assistant: `sudo systemctl enable --now bluetooth` so the Bluetooth integration can use the onboard adapter; add the UniFi Protect integration (needs a local console user, not the API key)
 - WireGuard profiles for family phones (UniFi console → Settings → VPN) so Immich mobile sync works away from home
 - More automations on the photo-digest template: network watchdog, server health reporter
 - Identify `middlesea` (Supermicro server) and `thermal-pi` — landing cards if they serve UIs
