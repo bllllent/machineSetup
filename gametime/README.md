@@ -67,8 +67,8 @@ that profile.
 `../ntfy`, wired automatically by its `setup.sh`; a public `https://ntfy.sh/<topic>`
 works too) and the [ntfy](https://ntfy.sh) app on the parent's phone subscribed
 to the same server + topic:
-every request becomes a push with **buttons** — "Yes, 60 min", "Yes, 30 min",
-"No" — that answer it right from the notification. The buttons call
+every request becomes a push with **buttons** — "Allow 60 min", "Allow 30 min",
+"Deny" — that answer it right from the notification. The buttons call
 `/act/<request>/<token>/approve|deny` on the server with a per-request signed
 token (no login cookie needed, dies once the request is answered), so the phone
 must reach the server: at home, or over the WireGuard VPN. Logins and repeated

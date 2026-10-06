@@ -171,7 +171,9 @@ async def notify(title, body, click=None, actions=None):
         headers["Actions"] = "; ".join(f"http, {label}, {url}, method=POST, clear=true" for label, url in actions[:3])
     try:
         async with httpx.AsyncClient(timeout=10) as c:
-            await c.post(NTFY_URL, content=body.encode(), headers=headers)
+            r = await c.post(NTFY_URL, content=body.encode(), headers=headers)
+        if r.status_code >= 400:
+            log.warning("ntfy rejected the push: %s %s", r.status_code, r.text[:200])
     except httpx.HTTPError as e:
         log.warning("ntfy failed: %s", e)
 
@@ -369,8 +371,9 @@ async def make_request(req: Request):
         state.save()
     act = f"{PUBLIC_URL}/act/{r['id']}/{action_token(r['id'])}"
     await notify(f"{p['name']} is asking for {minutes} min", note or "Tap to answer.", f"{PUBLIC_URL}/parent",
-                 actions=[(f"Yes, {minutes} min", f"{act}/approve"), ("Yes, 30 min", f"{act}/approve?minutes=30"),
-                          ("No", f"{act}/deny")])
+                 # no commas in labels: ntfy's Actions header is comma-separated
+                 actions=[(f"Allow {minutes} min", f"{act}/approve"), ("Allow 30 min", f"{act}/approve?minutes=30"),
+                          ("Deny", f"{act}/deny")])
     return {"ok": True, "request": r}
 
 
