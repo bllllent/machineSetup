@@ -25,6 +25,11 @@
 		reverse_proxy localhost:8085
 	}
 
+	@ntfy host ntfy.100b.amokamok.com
+	handle @ntfy {
+		reverse_proxy localhost:8090
+	}
+
 	# default: the landing page
 	handle {
 		root * /srv/site

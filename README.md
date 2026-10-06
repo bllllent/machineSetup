@@ -223,6 +223,16 @@ cd ~/machineSetup/gametime
 
 Details, model and security notes: [gametime/README.md](gametime/README.md). Caddy name `gametime.100b.amokamok.com` is already in the Caddyfile; landing card added.
 
+## 16. ntfy (self-hosted push notifications)
+
+`ntfy/` — [ntfy](https://ntfy.sh) on **http://192.168.0.190:8090**, LAN/VPN only, message cache in a Docker volume (throwaway). Game Time posts its requests here; anything else on the server can push to a phone with one `curl -d "text" http://localhost:8090/<topic>`.
+
+```
+cd ~/machineSetup/ntfy && ./setup.sh     # starts it, makes a private Game Time topic, wires gametime/.env, sends a test push
+```
+
+Phone: ntfy app → + → "Use another server" → `http://192.168.0.190:8090`, topic as printed by `setup.sh` (also in `gametime/.env`). No accounts: the topic name is the secret and the server is not reachable from the internet. Android keeps a direct connection; iOS needs `upstream-base-url: https://ntfy.sh` (set in `server.yml`) so Apple can be told "a message exists" — the content itself is only ever fetched from this server, so phones get pushes at home or on the WireGuard VPN. Caddy name `ntfy.100b.amokamok.com` is wired for when the proxy is up (then set `base-url` in `server.yml` to it).
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -247,3 +257,4 @@ Details, model and security notes: [gametime/README.md](gametime/README.md). Cad
 - 2026-07-26: Metadata portability: `scripts/set-album-location.py` (album GPS → Immich + `.xmp` sidecars) and `scripts/sync-dates-to-sidecars.py` (all Immich date corrections → sidecars). Originals never modified.
 - 2026-10-04: Home Assistant (`homeassistant/`), container with host networking; config under `/srv/data/homeassistant`; blaQ added via ESPHome; later the same day Enphase, LG ThinQ, Lutron and a Matter server.
 - 2026-10-05: Added Game Time (`gametime/`) — kids request internet time, parent approves, UniFi blocking policies toggle on a timer via the official Integration API. Deployed in demo mode on :8085 pending an API key.
+- 2026-10-06: Self-hosted ntfy (`ntfy/`) on :8090 for push notifications; Game Time requests arrive on the phone with Approve/Deny buttons.

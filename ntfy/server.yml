@@ -1,0 +1,18 @@
+# ntfy self-hosted at 100 Bosworth — LAN/VPN only, nothing exposed.
+# Docs: https://docs.ntfy.sh/config/
+base-url: "http://192.168.0.190:8090"      # what phones use; switch to https://ntfy.100b.amokamok.com once Caddy is up
+listen-http: ":80"
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "72h"
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+behind-proxy: false
+
+# iOS only: Apple pushes can't come from a LAN server, so the iOS app needs the
+# server to send a *poll request* through ntfy.sh. Only "a message exists on
+# this topic" leaves the house; the phone then fetches the content from here
+# (so it must be home or on the VPN). Android needs nothing — the app keeps a
+# direct connection. Harmless to leave on.
+upstream-base-url: "https://ntfy.sh"
+
+# No accounts: the topic name is the secret, and the server is LAN-only.
+auth-default-access: "read-write"

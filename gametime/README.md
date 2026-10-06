@@ -63,16 +63,18 @@ that profile.
 
 ## Notifications
 
-`NTFY_URL=https://ntfy.sh/<hard-to-guess-topic>` in `.env` and the
-[ntfy](https://ntfy.sh) app on the parent's phone subscribed to the same topic:
+`NTFY_URL=http://192.168.0.190:8090/<topic>` in `.env` (the self-hosted ntfy in
+`../ntfy`, wired automatically by its `setup.sh`; a public `https://ntfy.sh/<topic>`
+works too) and the [ntfy](https://ntfy.sh) app on the parent's phone subscribed
+to the same server + topic:
 every request becomes a push with **buttons** — "Yes, 60 min", "Yes, 30 min",
 "No" — that answer it right from the notification. The buttons call
 `/act/<request>/<token>/approve|deny` on the server with a per-request signed
 token (no login cookie needed, dies once the request is answered), so the phone
 must reach the server: at home, or over the WireGuard VPN. Logins and repeated
 wrong PINs push too. Without ntfy, just check the parent page (it polls every
-10 s). Self-hosting ntfy on this server is an option if the public relay feels
-wrong; the buttons work the same.
+10 s). ntfy runs on this server (`../ntfy`), so nothing leaves the house except, for
+iPhones, a content-free "new message" poke relayed via ntfy.sh to Apple.
 
 ## Security
 
