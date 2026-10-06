@@ -65,9 +65,14 @@ that profile.
 
 `NTFY_URL=https://ntfy.sh/<hard-to-guess-topic>` in `.env` and the
 [ntfy](https://ntfy.sh) app on the parent's phone subscribed to the same topic:
-every request becomes a push with an "open" link to `/parent`. Without it, just
-check the parent page (it polls every 10 s). Self-hosting ntfy on this server
-is an option later if the public relay feels wrong.
+every request becomes a push with **buttons** — "Yes, 60 min", "Yes, 30 min",
+"No" — that answer it right from the notification. The buttons call
+`/act/<request>/<token>/approve|deny` on the server with a per-request signed
+token (no login cookie needed, dies once the request is answered), so the phone
+must reach the server: at home, or over the WireGuard VPN. Logins and repeated
+wrong PINs push too. Without ntfy, just check the parent page (it polls every
+10 s). Self-hosting ntfy on this server is an option if the public relay feels
+wrong; the buttons work the same.
 
 ## Security
 

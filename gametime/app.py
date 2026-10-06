@@ -29,7 +29,7 @@ from typing import Optional
 
 import httpx
 from fastapi import Cookie, FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 import unifi
@@ -159,12 +159,16 @@ async def end(profile, reason):
     state.save()
 
 
-async def notify(title, body, click=None):
+async def notify(title, body, click=None, actions=None):
+    """ntfy push. `actions` = list of (label, url) -> buttons on the notification
+    that POST to the url straight from the phone (ntfy 'http' actions)."""
     if not NTFY_URL:
         return
     headers = {"Title": title, "Tags": "video_game"}
     if click:
         headers["Click"] = click
+    if actions:
+        headers["Actions"] = "; ".join(f"http, {label}, {url}, method=POST, clear=true" for label, url in actions[:3])
     try:
         async with httpx.AsyncClient(timeout=10) as c:
             await c.post(NTFY_URL, content=body.encode(), headers=headers)
@@ -233,6 +237,37 @@ def require_parent(gt_parent: Optional[str] = Cookie(default=None)):
 
 
 _failed = {"n": 0}
+
+
+def action_token(rid):
+    """Secret in the notification's button URLs: proves the tap came from a
+    phone that received the push. Dies with the request (approve/deny once)."""
+    return hmac.new(SECRET.encode(), f"request:{rid}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+async def _approve(rid, minutes, by):
+    """Called with state.lock held."""
+    r = state.request(rid)
+    if r["status"] != "pending":
+        raise HTTPException(409, f"request is already {r['status']}")
+    p = state.profile(r["profile_id"])
+    minutes = int(minutes or r["minutes"])
+    r["status"] = "approved"
+    r["minutes"] = minutes
+    until = await grant(p, minutes, by)
+    return p, minutes, until
+
+
+async def _deny(rid, by):
+    """Called with state.lock held."""
+    r = state.request(rid)
+    if r["status"] != "pending":
+        raise HTTPException(409, f"request is already {r['status']}")
+    r["status"] = "denied"
+    p = state.profile(r["profile_id"])
+    state.note(f"{p['name']}: request denied ({by})")
+    state.save()
+    return p
 
 
 def who(req: Request):
@@ -332,9 +367,31 @@ async def make_request(req: Request):
         state.d["requests"].append(r)
         state.note(f"{p['name']}: asked for {minutes} min" + (f' — "{note}"' if note else ""))
         state.save()
-    await notify(f"{p['name']} is asking for {minutes} min", note or "Open Game Time to approve or deny.",
-                 f"{PUBLIC_URL}/parent")
+    act = f"{PUBLIC_URL}/act/{r['id']}/{action_token(r['id'])}"
+    await notify(f"{p['name']} is asking for {minutes} min", note or "Tap to answer.", f"{PUBLIC_URL}/parent",
+                 actions=[(f"Yes, {minutes} min", f"{act}/approve"), ("Yes, 30 min", f"{act}/approve?minutes=30"),
+                          ("No", f"{act}/deny")])
     return {"ok": True, "request": r}
+
+
+@app.api_route("/act/{rid}/{token}/{what}", methods=["GET", "POST"])
+async def act_from_notification(rid: str, token: str, what: str, minutes: Optional[int] = None):
+    """Approve/deny straight from a notification button (or a tapped link).
+    No cookie: the token in the URL is the credential."""
+    if not hmac.compare_digest(token, action_token(rid)):
+        raise HTTPException(403, "bad token")
+    async with state.lock:
+        if what == "approve":
+            p, m, until = await _approve(rid, minutes, "parent (notification)")
+            msg = f"✅ {p['name']} is open until {local_clock(until)} ({m} min)."
+        elif what == "deny":
+            p = await _deny(rid, "notification")
+            msg = f"🚫 Denied {p['name']}'s request."
+        else:
+            raise HTTPException(404, "unknown action")
+    return HTMLResponse(f"<!doctype html><meta name=viewport content='width=device-width'>"
+                        f"<body style='font-family:system-ui;padding:2rem;font-size:1.2rem'>{msg}"
+                        f"<p><a href='{PUBLIC_URL}/parent'>Open Game Time</a></body>")
 
 
 @app.post("/api/request/{rid}/cancel")
@@ -373,14 +430,7 @@ async def approve(rid: str, req: Request, gt_parent: Optional[str] = Cookie(defa
     require_parent(gt_parent)
     body = await req.json() if int(req.headers.get("content-length") or 0) else {}
     async with state.lock:
-        r = state.request(rid)
-        if r["status"] != "pending":
-            raise HTTPException(409, f"request is {r['status']}")
-        p = state.profile(r["profile_id"])
-        minutes = int(body.get("minutes") or r["minutes"])
-        r["status"] = "approved"
-        r["minutes"] = minutes
-        until = await grant(p, minutes, "parent (approved)")
+        _, _, until = await _approve(rid, body.get("minutes"), "parent (approved)")
     return {"ok": True, "until": iso(until)}
 
 
@@ -388,11 +438,7 @@ async def approve(rid: str, req: Request, gt_parent: Optional[str] = Cookie(defa
 async def deny(rid: str, gt_parent: Optional[str] = Cookie(default=None)):
     require_parent(gt_parent)
     async with state.lock:
-        r = state.request(rid)
-        if r["status"] == "pending":
-            r["status"] = "denied"
-            state.note(f"{state.profile(r['profile_id'])['name']}: request denied")
-            state.save()
+        await _deny(rid, "parent page")
     return {"ok": True}
 
 
