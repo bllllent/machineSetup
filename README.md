@@ -211,6 +211,18 @@ Host presence on the IoT VLAN: the `vlan-ip` sidecar (busybox, host network, `NE
 
 Bluetooth: the MS-01's MediaTek adapter is `hci0`, but `bluetooth.service` is inactive on the host. Run `sudo systemctl enable --now bluetooth` before adding the Bluetooth integration.
 
+## 15. Game Time (UniFi policies on a timer)
+
+`gametime/` — kids with blocked devices open **http://192.168.0.190:8085** and ask for 30 min / 1 h / 2 h; a parent approves on `/parent` (PIN) or from an ntfy push. Approval switches the UniFi traffic rules (or zone-based firewall policies) that block that device **off**, and a timer switches them back **on**. Talks to the gateway with a console-local API key (`X-API-KEY`): traffic rules through the console's v2 API, firewall policies through the official Integration API (Network 10.1+). Only flips `enabled` on rules you pick, never creates or deletes anything. State (profiles, running grants) in `/srv/data/gametime/`. Both pages install to a phone home screen.
+
+```
+cd ~/machineSetup/gametime
+./setup.sh            # prompts: UniFi API key (console -> Settings -> Control Plane -> Integrations), parent PIN, optional ntfy topic
+./setup.sh --demo     # pretend policies, touches nothing on the network
+```
+
+Details, model and security notes: [gametime/README.md](gametime/README.md). Caddy name `gametime.100b.amokamok.com` is already in the Caddyfile; landing card added.
+
 ## Change log
 - 2026-07-20: Initial install, Ubuntu Server 26.04 LTS. F7 one-time boot menu confirmed working from front USB 3.0 port.
 - 2026-07-20: Added Photoprism stack (`photoprism/`) with one-shot setup script. Photos live in `/srv/photos`.
@@ -234,3 +246,4 @@ Bluetooth: the MS-01's MediaTek adapter is `hci0`, but `bluetooth.service` is in
 - 2026-07-26: Added `automations/photo-digest` — daily "on this day" memories email (Immich photos + OpenAI intro) on a systemd timer.
 - 2026-07-26: Metadata portability: `scripts/set-album-location.py` (album GPS → Immich + `.xmp` sidecars) and `scripts/sync-dates-to-sidecars.py` (all Immich date corrections → sidecars). Originals never modified.
 - 2026-10-04: Home Assistant (`homeassistant/`), container with host networking; config under `/srv/data/homeassistant`; blaQ added via ESPHome; later the same day Enphase, LG ThinQ, Lutron and a Matter server.
+- 2026-10-05: Added Game Time (`gametime/`) — kids request internet time, parent approves, UniFi blocking policies toggle on a timer via the official Integration API. Deployed in demo mode on :8085 pending an API key.

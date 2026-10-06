@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Time</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Game Time">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div><h1>🎮 Game Time</h1><p class="sub">Ask for internet time. A parent approves it from their phone.</p></div>
+  <a href="/parent" class="sub">Parent →</a>
+</header>
+<main>
+  <div id="banner"></div>
+  <div id="profiles"></div>
+  <p class="muted" id="empty" style="display:none">No profiles yet — a parent sets them up on the parent page.</p>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let data = null;
+
+function toast(msg, ms = 2500) { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms); }
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+function fmtLeft(m) { return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; }
+
+function render() {
+  const b = $("#banner");
+  b.innerHTML = "";
+  if (data.mock) b.innerHTML = `<div class="banner info">Demo mode — pretend policies, nothing on the real network changes.</div>`;
+  if (data.unifi_error) b.innerHTML += `<div class="banner err">Can't reach the UniFi gateway: ${esc(data.unifi_error)}</div>`;
+  const box = $("#profiles");
+  box.innerHTML = "";
+  $("#empty").style.display = data.profiles.length ? "none" : "block";
+  for (const p of data.profiles) {
+    const c = document.createElement("div");
+    c.className = "card";
+    let status, cls;
+    if (p.grant) { status = `Open until ${p.grant.until_local}` + (p.blocking.length ? " (extra time)" : ""); cls = "open"; }
+    else if (p.open) { status = "Open" + (p.next_block ? ` · next block ${p.next_block}` : ""); cls = "open"; }
+    else { status = "Blocked" + (p.blocked_until ? ` until ${p.blocked_until}` : ""); cls = "blocked"; }
+    c.innerHTML = `
+      <div class="row"><span style="font-size:1.6rem">${esc(p.icon)}</span>
+        <div class="grow"><div class="name">${esc(p.name)}</div><div class="state ${cls}">${status}</div></div>
+        ${p.grant ? `<div class="big">${fmtLeft(p.grant.minutes_left)}</div>` : ""}
+      </div>
+      ${p.pending ? `<p class="state pending" style="margin-top:.6rem">⏳ Asked for ${p.pending.minutes} min — waiting for a parent…
+          <button class="small" data-cancel="${p.pending.id}">cancel</button></p>` : ""}
+      <div class="actions">
+        ${[30, 60, 120].filter(m => m <= p.max_minutes).map(m => `<button data-ask="${m}" ${p.pending ? "disabled" : ""}>${p.grant ? "+" : ""}${m >= 60 ? (m / 60) + " h" : m + " min"}</button>`).join("")}
+        <input type="text" placeholder="note for the parent (optional)" maxlength="140" class="grow">
+      </div>`;
+    c.querySelectorAll("[data-ask]").forEach(btn => btn.onclick = async () => {
+      try {
+        await api("/api/request", { profile_id: p.id, minutes: +btn.dataset.ask, note: c.querySelector("input").value });
+        toast("Sent! Waiting for a parent to approve.");
+        refresh();
+      } catch (e) { toast("Oops: " + e.message); }
+    });
+    const cx = c.querySelector("[data-cancel]");
+    if (cx) cx.onclick = async () => { await api(`/api/request/${cx.dataset.cancel}/cancel`, {}); refresh(); };
+    box.appendChild(c);
+  }
+}
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+
+async function refresh() {
+  try { data = await api("/api/status"); render(); }
+  catch (e) { $("#banner").innerHTML = `<div class="banner err">Game Time server not answering: ${esc(e.message)}</div>`; }
+}
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>

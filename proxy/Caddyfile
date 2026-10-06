@@ -20,6 +20,11 @@
 		reverse_proxy localhost:8123
 	}
 
+	@gametime host gametime.100b.amokamok.com
+	handle @gametime {
+		reverse_proxy localhost:8085
+	}
+
 	# default: the landing page
 	handle {
 		root * /srv/site

@@ -1,0 +1,15 @@
+name: gametime
+
+services:
+  gametime:
+    build: .
+    container_name: gametime
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    env_file: .env          # UNIFI_API_KEY, PARENT_PIN, SECRET, ... (gitignored; written by setup.sh)
+    environment:
+      TZ: America/Los_Angeles
+      DATA_DIR: /data
+    volumes:
+      - /srv/data/gametime:/data     # state.json: profiles, running grants, log

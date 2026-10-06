@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game Time — Parent</title>
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <div><h1>🎮 Game Time — Parent</h1><p class="sub" id="sub">UniFi blocking policies, on a timer.</p></div>
+  <div><a href="/" class="sub">Kid page →</a> &nbsp; <button class="small" id="logout" style="display:none">Log out</button></div>
+</header>
+<main>
+  <div id="banner"></div>
+
+  <div class="card" id="login" style="display:none">
+    <div class="row"><input type="password" inputmode="numeric" id="pin" placeholder="Parent PIN" class="grow" autofocus>
+      <button class="primary" id="loginBtn">Unlock</button></div>
+    <p class="muted" style="margin-top:.5rem">Set in <code>.env</code> on the server (PARENT_PIN).</p>
+  </div>
+
+  <div id="app" style="display:none">
+    <h2>Requests</h2>
+    <div id="requests"></div>
+
+    <h2>Profiles</h2>
+    <div id="profiles"></div>
+    <button id="addProfile">+ New profile</button>
+
+    <div class="card" id="editor" style="display:none; margin-top:1rem">
+      <div class="row"><input type="text" id="pName" placeholder="Name (e.g. Gaming PC)" class="grow">
+        <input type="text" id="pIcon" placeholder="🎮" style="width:4rem" maxlength="4">
+        <label class="muted">max <input type="number" id="pMax" min="5" step="5" style="width:5rem"> min</label></div>
+      <p class="muted" style="margin:.7rem 0 .3rem">Policies that normally <b>block</b> this profile (they get switched off while time is granted):</p>
+      <div id="pPolicies"></div>
+      <div class="actions"><button class="primary" id="pSave">Save</button><button id="pCancel">Cancel</button>
+        <button class="danger" id="pDelete" style="margin-left:auto">Delete profile</button></div>
+    </div>
+
+    <h2>All policies <span class="tag" id="verTag"></span></h2>
+    <p class="muted" style="margin-bottom:.5rem">Live from the gateway: traffic rules and (if the zone-based firewall is on) user-defined firewall policies. Switch = rule enabled.</p>
+    <div class="card" id="policies"></div>
+
+    <h2>Log</h2>
+    <div class="card log" id="log"></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let S = null, editing = null;
+
+function toast(msg, ms = 2500) { const t = $("#toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", ms); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch])); }
+function fmtLeft(m) { return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; }
+function ago(iso) { const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; }
+
+async function api(path, body, method) {
+  const r = await fetch(path, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (r.status === 401 && path !== "/api/login") { showLogin(); throw new Error("PIN required"); }
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+async function act(path, body, method) { try { await api(path, body, method); await refresh(); } catch (e) { toast("Failed: " + e.message, 5000); } }
+
+function showLogin() { $("#login").style.display = ""; $("#app").style.display = "none"; $("#logout").style.display = "none"; }
+$("#loginBtn").onclick = async () => { try { await api("/api/login", { pin: $("#pin").value }); $("#pin").value = ""; refresh(); } catch (e) { toast(e.message); } };
+$("#pin").onkeydown = e => { if (e.key === "Enter") $("#loginBtn").click(); };
+$("#logout").onclick = async () => { await api("/api/logout", {}); showLogin(); };
+
+function render() {
+  $("#login").style.display = "none"; $("#app").style.display = ""; $("#logout").style.display = "";
+  $("#sub").textContent = S.host ? `Gateway ${S.host.replace(/^https?:\/\//, "")} · UniFi Network ${S.version || "?"}` : "Demo mode";
+  $("#verTag").textContent = S.policies.length + " policies";
+  $("#banner").innerHTML = (S.mock ? `<div class="banner info">Demo mode — pretend policies. Run setup.sh with a real API key to go live.</div>` : "");
+    + (S.unifi_error ? `<div class="banner err">Can't reach the UniFi gateway: ${esc(S.unifi_error)}</div>` : "");
+
+  // requests
+  const pending = S.requests.filter(r => r.status === "pending");
+  $("#requests").innerHTML = pending.length ? pending.map(r => `
+    <div class="card"><div class="row"><div class="grow"><div class="name">${esc(r.profile)} asks for ${r.minutes} min</div>
+      <div class="muted">${ago(r.created)}${r.note ? ` — “${esc(r.note)}”` : ""}</div></div></div>
+      <div class="actions">
+        <button class="primary" data-approve="${r.id}">Approve ${r.minutes} min</button>
+        <button data-approve="${r.id}" data-min="30">30 min</button>
+        <button data-approve="${r.id}" data-min="60">1 h</button>
+        <button class="danger" data-deny="${r.id}">Deny</button></div></div>`).join("")
+    : `<p class="muted">Nothing pending.</p>`;
+  document.querySelectorAll("[data-approve]").forEach(b => b.onclick = () => act(`/api/parent/requests/${b.dataset.approve}/approve`, b.dataset.min ? { minutes: +b.dataset.min } : {}));
+  document.querySelectorAll("[data-deny]").forEach(b => b.onclick = () => act(`/api/parent/requests/${b.dataset.deny}/deny`, {}));
+
+  // profiles
+  $("#profiles").innerHTML = S.profiles.map(p => {
+    const st = p.grant ? `<span class="state open">Open until ${p.grant.until_local} · ${fmtLeft(p.grant.minutes_left)} left</span>`
+      : p.open ? `<span class="state open">Open</span> <span class="muted">${p.next_block ? "next block " + esc(p.next_block) : "no block scheduled"}</span>`
+      : `<span class="state blocked">Blocked</span> <span class="muted">${p.blocked_until ? "until " + esc(p.blocked_until) : "indefinitely"} · ${esc(p.blocking.join(", "))}</span>`;
+    // dot: red = blocking right now, green = enabled but outside its schedule, grey = disabled
+    const pols = p.policies.map(x => `<span class="tag" title="${x.enabled === false ? "disabled" : x.blocking_now ? "blocking now" : "armed, outside schedule"}"><span class="dot ${x.enabled === null ? "" : x.blocking_now ? "off" : x.enabled ? "on" : ""}"></span>${esc(x.name)}</span>`).join(" ");
+    return `<div class="card"><div class="row"><span style="font-size:1.4rem">${esc(p.icon)}</span>
+      <div class="grow"><div class="name">${esc(p.name)}</div><div>${st}</div><div style="margin-top:.3rem">${pols || '<span class="muted">no policies yet</span>'}</div></div>
+      <button class="small" data-edit="${p.id}">Edit</button></div>
+      <div class="actions">
+        <button data-grant="${p.id}" data-min="30">${p.grant ? "+" : ""}30 min</button>
+        <button data-grant="${p.id}" data-min="60">${p.grant ? "+" : ""}1 h</button>
+        <button data-grant="${p.id}" data-min="120">${p.grant ? "+" : ""}2 h</button>
+        ${p.grant || p.policies.some(x => x.enabled === false) ? `<button class="danger" data-end="${p.id}">End time now</button>` : ""}
+      </div></div>`;
+  }).join("") || `<p class="muted">No profiles yet. Create one and pick the policies that block that device.</p>`;
+  document.querySelectorAll("[data-grant]").forEach(b => b.onclick = () => act(`/api/parent/profiles/${b.dataset.grant}/grant`, { minutes: +b.dataset.min }));
+  document.querySelectorAll("[data-end]").forEach(b => b.onclick = () => act(`/api/parent/profiles/${b.dataset.end}/end`, {}));
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => openEditor(S.profiles.find(p => p.id === b.dataset.edit)));
+
+  // policies
+  $("#policies").innerHTML = S.policies.map(p => `
+    <div class="pol"><label class="switch"><input type="checkbox" data-pol="${p.id}" ${p.enabled ? "checked" : ""}><span></span></label>
+      <div class="grow"><div>${esc(p.name)} <span class="tag">${esc(p.action)}</span> ${p.kind === "traffic_rule" ? '<span class="tag">traffic rule</span>' : ""}</div>
+      <div class="meta">${esc(p.source)} → ${esc(p.destination)}${p.schedule ? " · " + esc(p.schedule) : ""}${p.description ? " · " + esc(p.description) : ""}</div></div></div>`).join("")
+    || `<p class="muted">No user-defined firewall policies found.</p>`;
+  document.querySelectorAll("[data-pol]").forEach(cb => cb.onchange = () => act(`/api/parent/policies/${cb.dataset.pol}`, { enabled: cb.checked }));
+
+  $("#log").textContent = S.log.map(l => `${new Date(l.ts).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}  ${l.msg}`).join("\n") || "—";
+  if (editing) renderEditor();
+}
+
+function openEditor(p) {
+  editing = p ? { ...p } : { id: null, name: "", icon: "🎮", max_minutes: S.max_minutes, policy_ids: [] };
+  $("#pName").value = editing.name; $("#pIcon").value = editing.icon; $("#pMax").value = editing.max_minutes;
+  $("#pDelete").style.display = p ? "" : "none";
+  renderEditor();
+  $("#editor").style.display = "";
+  $("#editor").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function renderEditor() {
+  $("#pPolicies").innerHTML = S.policies.map(p => `<label class="chk"><input type="checkbox" value="${p.id}" ${editing.policy_ids.includes(p.id) ? "checked" : ""}>
+    ${esc(p.name)} <span class="muted">— ${esc(p.action)} · ${esc(p.source)} → ${esc(p.destination)}${p.schedule ? " · " + esc(p.schedule) : ""}</span></label>`).join("")
+    || `<p class="muted">No policies to choose from.</p>`;
+  $("#pPolicies").querySelectorAll("input").forEach(cb => cb.onchange = () => {
+    editing.policy_ids = [...$("#pPolicies").querySelectorAll("input:checked")].map(x => x.value);
+  });
+}
+$("#addProfile").onclick = () => openEditor(null);
+$("#pCancel").onclick = () => { editing = null; $("#editor").style.display = "none"; };
+$("#pSave").onclick = async () => {
+  const body = { id: editing.id, name: $("#pName").value, icon: $("#pIcon").value, max_minutes: +$("#pMax").value, policy_ids: editing.policy_ids };
+  editing = null; $("#editor").style.display = "none";
+  await act("/api/parent/profiles", body);
+};
+$("#pDelete").onclick = async () => {
+  if (!confirm(`Delete "${editing.name}"?`)) return;
+  const id = editing.id; editing = null; $("#editor").style.display = "none";
+  await act(`/api/parent/profiles/${id}`, null, "DELETE");
+};
+
+async function refresh() {
+  try { S = await api("/api/parent/state"); render(); }
+  catch (e) { if (e.message !== "PIN required") $("#banner").innerHTML = `<div class="banner err">${esc(e.message)}</div>`; }
+}
+refresh();
+setInterval(() => { if (!editing) refresh(); }, 10000);
+</script>
+</body>
+</html>
